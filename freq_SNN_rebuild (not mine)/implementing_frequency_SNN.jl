@@ -1,3 +1,5 @@
+# this is a derivative work (original: https://arxiv.org/abs/1902.05705)
+
 #include("network_functions.jl")
 include("parallel_network_functions.jl")
 include("loss_functions.jl")
