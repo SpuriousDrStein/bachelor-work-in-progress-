@@ -27,31 +27,31 @@ end
 
 
 # network
-l1 = create_dense_layer(input_size, 13)
-l2 = create_dense_layer(13, 12)
-l3 = create_dense_layer(12, 11)
-l4 = create_dense_layer(11, 10)
+l1 = create_dense_layer(input_size, 10)
+# l2 = create_dense_layer(13, 12)
+# l3 = create_dense_layer(12, 11)
+# l4 = create_dense_layer(11, 10)
 
 for i in 1:iterations
     ind = rand(1:length(train_y))
     X = reshape(train_x[:, :, ind] * 1, (28*28))
     y = oh_train_y[ind, :]
 
-    frq_update!(l1, X, T) # returns membranes
-    frq_update!(l2, l1.act_frequencies, T)
-    frq_update!(l3, l2.act_frequencies, T)
-    frq_update!(l4, l3.act_frequencies, T)
     println("iteration  : $i")
 
-    prediction = softmax(l4.act_frequencies)
+    p1 = forward(l1, X, T)
+    prediction = softmax(p1)
     error = crossentropy(prediction, y)
     println("prediction : $prediction")
     println("label      : $y")
     println("error      : $error")
 
-    d_ce = d_crossentropy(prediction, y)
-    d_soft = d_softmax(l4.act_frequencies)
-    d_frq_update!(l4, l3.act_frequencies, T)
+    d = d_crossentropy(prediction, y)
+    println(d)
+    d = d_softmax(l4.act_frequencies) * d
+    println(d)
+
+    d = d_frq_simulate(l1, X, d, T) * d
 
     # println(l1.act_frequencies, l1.membranes)
     # println(l2.act_frequencies, l2.membranes)
@@ -59,6 +59,7 @@ for i in 1:iterations
     # println(l4.act_frequencies, l4.membranes)
 end
 
+a = rand(5); b = rand(5,10)
 
 
 #@code_llvm loss(X, y)

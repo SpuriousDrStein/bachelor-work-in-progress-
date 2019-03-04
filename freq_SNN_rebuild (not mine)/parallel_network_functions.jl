@@ -5,7 +5,7 @@ mutable struct Layer
     biases::Vector
     thresholds::Vector
     act_frequencies::Vector
-    membranes::Vector
+    # membranes::Vector
 end
 
 
@@ -17,56 +17,54 @@ end
 #     (input .- threshold) .>= 0
 # end
 
-function frq_update_z(input::Vector, l::Layer)
-    l.thresholds .* dropdims(sum(l.weights .* input .+ l.biases', dims=1), dims=1)
-end
 
-function frq_update_mem(z::Vector, last_mem::Vector, thresholds::Vector)
-    last_mem .+ z .- (thresholds .* (last_mem .- thresholds .>= 0))
-end
+# function frq_update_mem(z::Vector, last_mem::Vector, thresholds::Vector)
+#     last_mem .+ z .- (thresholds .* (last_mem .- thresholds .>= 0))
+# end
 
-function frq_simulate(layer::Layer, input::Vector, T::Integer) # !t denotes temprary mutation
-    s = frq_update_z(input .* T, layer)
-    s = floor.(s ./ layer.thresholds)
-    s = s .* (s .> 0)
+function forward(l::Layer, input::Vector, T::Integer) # !t denotes temprary mutation
+    s = l.thresholds .* (l.weights' * (input .* T) .+ l.biases)
+    s = floor.(s ./ l.thresholds)
+    s = s .* (s .>= 0)
     min.(s, T)
-end
-
-function frq_update!(layer::Layer, input::Vector, T::Integer)
-    # yt = frq_truncate_z(yw, layer.thresholds, T)
-    z = frq_update_z(input, layer)
-    layer.membranes = frq_update_mem(z, layer.membranes, layer.thresholds)
-
-    layer.act_frequencies = frq_simulate(layer, input, T)
+    s
 end
 
 # DERIVATIVES
-function d_frq_update_z(input::Vector, l::Layer)
-    dzdw = repeat(l.thresholds', size(input)[1]) .* input
-    dzdb = l.thresholds'
-    dzdx = l.thresholds' .* l.weights # NxM matrix
-    dzdx, dzdw, dzdb
+# function d_frq_update_z(input::Vector, l::Layer)
+#     dydw = repeat(l.thresholds', size(input)[1]) .* input
+#     dydb = l.thresholds
+#     dydx = l.thresholds' .* l.weights # NxM matrix
+#     dydx, dydw, dydb
+# end
+
+function d_forward(l::Layer, x::Vector, T::Integer)
+    z = frq_update_z(x .* T, l)
+    a = floor.(z ./ l.thresholds)
+
+    dadw = (repeat(l.thresholds', size(x)[1]) .* x .* T) ./ (l.thresholds.^2)'
+    dadb = l.thresholds
+    dadx = l.weights ./ l.thresholds'
+
+    dadw = dadw .* (z .>= 0)'
+    dadb = dadb .* (z .>= 0)
+    dadx = dadx .* (z .>= 0)'
+
+    dadx, dadw, dadb
 end
 
-function d_frq_simulate(l::Layer, x::Vector, T::Integer)
+function d_frq_update!(layer::Layer, input::Vector, d, T::Integer; lr=0.0003)
+    dx, dw, db = d_forward(layer, input, T)
+
+    layer.weights += lr .* (d' .* dw)
+    layer.biases += lr .* (d .* db)
+
+    dx
 end
-
-function d_frq_update_mem(z::Vector, membranes::Vector, thesholds::Vector)
-end
-
-function d_frq_update!(layer::Layer, input::Vector, T::Integer; lr=0.003)
-    dzdx, dzdw, dzdb = d_frq_update_z(input, layer)
-    # println(size(dzdx))
-    # println(size(dzdw))
-    # println(size(dzdb))
-    
-end
-
-
 
 
 function create_dense_layer(input_size, output_size; distribution_w=Uniform(-0.05, 0.05), distribution_b=Uniform(0, 0.01), thresholds=[1 for _ in 1:output_size])
     w = rand(distribution_w, input_size, output_size)
     b = rand(distribution_b, output_size)
-    Layer(w, b, thresholds, zeros(output_size), zeros(output_size))
+    Layer(w, b, thresholds, zeros(output_size))
 end
