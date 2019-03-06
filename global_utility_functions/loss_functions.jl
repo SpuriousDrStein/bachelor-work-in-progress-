@@ -1,4 +1,3 @@
-using Zygote
 
 entropy(p::Number; base=ℯ) = -(p * log(base, p))
 entropy(p::AbstractArray; base=ℯ) = -sum(p .* log.(base, p))

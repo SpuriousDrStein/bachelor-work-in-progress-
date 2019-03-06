@@ -138,4 +138,4 @@ function main_loop!(iterations, network, X, y)
     end
 end
 
-main_loop!(999999, NN, train_x_f, train_y_onehot)
+main_loop!(10000, NN, train_x_f, train_y_onehot)
