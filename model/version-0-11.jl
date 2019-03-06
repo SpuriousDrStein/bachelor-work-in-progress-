@@ -4,11 +4,13 @@
 # 𝛆 = threhsold
 # ϑ = weights
 # ψ = neur-transmitter
+
 include("..\\global_utility_functions\\activation_functions.jl")
 include("..\\global_utility_functions\\loss_functions.jl")
 using Distributions
+using MLDatasets
 
-FloatN = Float32
+FloatN = Float64
 
 mutable struct Layer
     S::AbstractArray{FloatN, 1}
@@ -26,29 +28,114 @@ function d_test_activation(l::Layer)
 end
 
 function forward_update!(l::Layer, x)
-    l.S .= l.S .- (test_activation(l) .* l.𝛆)
-    l.S = (l.S .* l.decay + l.ϑ * x) .* l.ψ
+    l.S .= abs.(l.S) .- test_activation(l)
+    l.S = (l.S .* l.decay .+ l.ϑ' * x) .* l.ψ
     return test_activation(l), l.S
 end
 
-function backward_update!(l::Layer, x, dEds; lr=0.003)
-    dsdϑ = (d_test_activation(l) .* l.ψ) * x'
-    l.ϑ -= lr .* dEds * dsdϑ
+function backward_pass(l::Layer, dEda)
+    return ((l.ϑ .* l.ψ') .* d_test_activation(l)') * dEda
+end
+
+function backward_update!(l::Layer, x, dEda; lr=0.003)
+    dadϑ = x * l.ψ'
+    l.ϑ -= dadϑ .* (lr .* dEda)'
 end
 
 
-init_states = [0, 0, 0]
-init_decays = [0.99, 0.99, 0.99]
-init_weights = rand(Uniform(0, 0.1), 3, 4)
-init_NT = [1, 1.1, 0.9]
-init_thresholds = [1, 1, 1]
+function network_backward!(N::Array{Layer, 1}, X, dEdy; final_act_df=d_softmax)
+    dEdXl = backward_pass(N[end], dEdy')
+    backward_update!(N[end], test_activation(N[end-1]), dEdy')
 
-l1 = Layer(init_states, init_decays, init_weights, init_NT, init_thresholds)
+    if length(N) > 2
+        for l in reverse((1:length(N))[2:end-1])
+            dEdXl = backward_pass(N[l], dEdXl)
+            backward_update!(N[l], test_activation(N[l-1]), dEdXl')
+        end
+    end
+
+    dEdXl = backward_pass(N[1], dEdXl)
+    backward_update!(N[1], X, dEdXl')
+    return dEdXl
+end
+
+function network_forward!(N::Array{Layer, 1}, X)
+    a, s = forward_update!(N[1], X)
+    for l in N[2:end]
+        a, s = forward_update!(l, s)
+    end
+    return a, s
+end
 
 
-X = rand(4)
-y = rand(3)
+function create_layer(input_size, output_size;
+    init_decays=[0.99 for _ in 1:output_size],
+    init_states=zeros(output_size),
+    init_weights=rand(Uniform(-0.05, 0.05),
+    input_size, output_size),
+    init_NT=[1 for _ in 1:output_size],
+    init_thresholds=[1 for _ in 1:output_size])
+
+    Layer(init_states, init_decays, init_weights, init_NT, init_thresholds)
+end
 
 
-y_hat, s = forward_update!(l1, X)
-println(s, y_hat)
+lr=0.003
+iterations = 500
+input_size = 28*28
+output_size = 10
+
+
+l1 = create_layer(input_size, 400)
+l2 = create_layer(400, 300)
+l3 = create_layer(300, 200)
+l4 = create_layer(200, 100)
+l5 = create_layer(100, 50)
+l6 = create_layer(50, output_size)
+NN = [l1,l2,l3,l4,l5,l6]
+
+
+train_x, train_y = MNIST.traindata()
+test_x,  test_y  = MNIST.testdata()
+
+train_x_f = reshape(train_x, (28*28, 60000))
+test_x_f = reshape(test_x, (28*28, 10000))
+
+train_y_onehot = zeros(10, length(train_y))
+for (i, a) in enumerate(train_y)
+    train_y_onehot[a+1, i] = 1.
+end
+test_y_onehot = zeros(10, length(test_y))
+for (i, a) in enumerate(test_y)
+    test_y_onehot[a+1, i] = 1.
+end
+
+function main_loop!(iterations, network, X, y)
+    for i in 1:iterations
+        r = rand(1:size(X)[2])
+        x_ = X[:, r]
+        y_ = y[:, r]
+
+
+        out, s = network_forward!(network, x_)
+        y_hat = softmax(out)
+        loss = crossentropy(y_hat, y_)
+
+        dEdCE = d_crossentropy(y_hat, y_)
+        dCEdSoft = d_softmax(out)
+        dEdSoft = dEdCE' * dCEdSoft
+        network_backward!(network, x_, dEdSoft)
+
+        # println("sum: ", sum(l1.ϑ))
+        # println("max: ", maximum(l1.ϑ))
+        # println("min: ", minimum(l1.ϑ))
+        # println("avg: ", sum(l1.ϑ)/length(l1.ϑ))
+        println("|| loss:  \t", loss)
+        println("states     : ", NN[end].S)
+        println("acivations : ", test_activation(NN[end]))
+        println("weights_sum: ", sum(NN[end].ϑ, dims=1))
+        println("\n")
+    end
+end
+
+main_loop!(999999, NN, train_x_f, train_y_onehot)
