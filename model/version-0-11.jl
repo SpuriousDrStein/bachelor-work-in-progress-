@@ -279,6 +279,3 @@ function RL_train_net!(NN, batch)
         end
     end
 end
-
-
-plot(reward_metric)
