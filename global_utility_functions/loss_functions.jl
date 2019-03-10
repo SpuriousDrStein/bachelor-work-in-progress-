@@ -26,11 +26,11 @@ d_KL_divergence(p::Number, q::Number; base=ℯ) = -p * d_log(base, q/p) * ((p-q)
 d_KL_divergence(p::AbstractArray, q::AbstractArray; base=ℯ) = -sum(-p .* d_log.(base, q./p) .* ((p.-l)./(p.^2)) .+ log.(base, q./p))
 
 d_SD(x::Number, y::Number; base=ℯ) = -2 * (y - x)
-d_SD(x::AbstractArray, y::AbstractArray; base=ℯ) = sum(-2 .* (y .- x))
+d_SD(x::AbstractArray, y::AbstractArray; base=ℯ) = -2 .* (y .- x)
 
 
 
-# 
+#
 # Zygote.@grad entropy(p, base=ℯ) = entropy(p, base=base), del -> (del * d_entropy(p, base=base),)
 # Zygote.@grad crossentropy(p, l, base=ℯ) = crossentropy(p, l, base=base), del -> (del * d_crossentropy(p, l, base=base),)
 # Zygote.@grad KL_divergence(p, l, base=ℯ) = KL_divergence(p, l, base=base), del -> (del * d_KL_divergence(p, l, base=base),)
