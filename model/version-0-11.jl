@@ -10,11 +10,6 @@ include("..\\global_utility_functions\\loss_functions.jl")
 using Distributions
 using MLDatasets
 
-println("size Float16 = ", sizeof(Float16(1.)))
-println("size Float32 = ", sizeof(Float32(1.)))
-println("size Float64 = ", sizeof(Float64(1.)))
-println("size BigFloat = ", sizeof(BigFloat(1.)))
-
 FloatN = Float64
 
 function Base.repeat(a::AbstractArray{T, 2} where T <: Number, n::Integer)
@@ -27,6 +22,7 @@ end
 
 mutable struct Layer
     S::AbstractArray{FloatN, 1}
+    A::AbstractArray{FloatN, 1}
     H::AbstractArray{FloatN, 2}
     ψ::AbstractArray{FloatN, 1}
     𝛆::AbstractArray{FloatN, 1}
@@ -46,7 +42,7 @@ end
 function forward_update!(l::Layer, x)
     push_buffer!(l)
     l.S = (l.H * l.S .+ l.ϑ' * x) .* l.ψ
-    act = test_activation(l)
+    l.A = test_activation(l)
     # println("layer state: ", l.S)
     l.S .*= (l.S .< l.𝛆)
     return act
@@ -55,7 +51,7 @@ end
 function network_forward!(N::Array{Layer, 1}, X)
     a = forward_update!(N[1], X)
     # println("avg activ: ", sum(a)/length(N[1].S))
-    for l in N[2:end]
+    for (i, l) in enumerate(N[2:end])
         a = forward_update!(l, a)
         # println("avg activ: ", sum(a)/length(l.S))
     end
@@ -94,14 +90,14 @@ end
 
 function network_backward!(N::Array{Layer, 1}, dEdy; final_act_df=d_softmax)
     dEdS = d_test_activation(N[end]) .* dEdy
-    spatial_backward_update!(N[end], test_activation(N[end-1]), dEdy)
+    spatial_backward_update!(N[end], N[end-1].A, dEdy)
     temporal_backward_update!(N[end], dEdS)
 
     dEdXl = spatial_backward_pass(N[end], dEdy')
     if length(N) > 2
         for l in reverse((1:length(N))[2:end-1])
 
-            spatial_backward_update!(N[l], test_activation(N[l-1]), dEdXl')
+            spatial_backward_update!(N[l], N[l-1].A, dEdXl')
             temporal_backward_update!(N[l], dEdXl)
             dEdXl = spatial_backward_pass(N[l], dEdXl)
         end
@@ -203,74 +199,51 @@ end
 #
 # # loss_over_time = main_loop!(1000, NN, [sin(i) for i in 1:10000000], [])
 
+
+
+
+
+# cross entropy methode
+# describing:
+# - model free
+# - policy based
+# - on policy
+
 using Plots
 using OpenAIGym
 using StatsBase
 using Random
 
-# describing:
-# - model free
-# - policy based
-# - on policy
-lr=0.003
+lr=0.001
+early_reward_accentuation = 1.1
 batch_size = 30
-top_selection = 5
+top_selection = 3
 simulation_time = 60
 input_size = 4
 output_size = 2
-buffer_length = 1
-training_iterations = 300
+buffer_length = 3
+training_iterations = 1000
+
+reward_metric = [0. for _ in 1:training_iterations]
+action_index = [i for i in 1:length(env.actions)]
+action_space = one(action_index*action_index')
+
 
 l1 = create_layer(input_size, 10, buffer_length)
-l2 = create_layer(10, 7, buffer_length)
-l3 = create_layer(7, output_size, buffer_length)
-NN = [l1, l2, l3]
+l2 = create_layer(10, output_size, buffer_length)
+NN = [l1, l2]
 
 
 env = GymEnv(:CartPole, :v0)
 
 
-# cross entropy methode
-
-reward_metric = [0. for _ in 1:training_iterations]
-action_index = [i for i in 1:length(env.actions)]
-action_space = one(action_index*action_index')
-for k in 1:training_iterations
-    batch = []
-    for i in 1:batch_size
-        s = reset!(env)
-        episode_steps = []
-
-        for j in 1:simulation_time
-            out = network_forward!(NN, Array(s))
-            a_prob = Weights(softmax(out))
-            a = sample(action_index, a_prob)
-
-            append!(episode_steps, [Pair(Array(s), action_space[a, :])])
-            r, s = step!(env, env.actions[a])
-
-            # println("out:  ", out)
-
-            # render(env)
-
-            if env.done
-                append!(batch, [Pair(env.total_reward, episode_steps)])
-                break
-            end
-        end
-    end
-    println("batch $k finished")
-    println("avg_reward = $(mean([b[1] for b in batch]))")
-    reward_metric[k] += mean([b[1] for b in batch])
-    RL_train_net!(NN, batch)
-end
-
-function RL_train_net!(NN, batch)
-    rew, best = [b[1] for b in sort(batch)][end-top_selection:end], [b[2] for b in sort(batch)][end-top_selection:end]
-    println("best selection: $rew")
+function RL_train_net!(NN, batch, top_n)
+    rew = [b[1] for b in sort(batch)][end-top_n:end]
+    best = [b[2] for b in sort(batch)][end-top_n:end]
+    # println("best selection: $rew")
     for b in best
         for (s, a) in b
-            out = network_forward!(NN, Array(s))
+            out, _ = network_forward!(NN, Array(s))
             pa = softmax(out)
             loss = crossentropy(pa, a)
             dE = d_crossentropy(pa, a)
@@ -279,3 +252,54 @@ function RL_train_net!(NN, batch)
         end
     end
 end
+
+
+for k in 1:training_iterations
+    batch = []
+
+    for i in 1:batch_size
+        s = reset!(env)
+        episode_steps = []
+        reward_counter = 0
+
+        for j in 1:simulation_time
+            out, net_states = network_forward!(NN, Array(s))
+            a_prob = Weights(softmax(out))
+            a = sample(action_index, a_prob)
+
+            append!(episode_steps, [Pair(Array(s), action_space[a, :])])
+            r, s = step!(env, env.actions[a])
+
+            reward_counter = reward_counter * early_reward_accentuation + r
+
+
+            # render(env)
+
+            if env.done
+                append!(batch, [Pair(reward_counter, episode_steps)])
+                break
+            end
+        end
+    end
+    println("batch $k finished")
+    println("avg_reward = $(mean([b[1] for b in batch]))")
+    reward_metric[k] += mean([b[1] for b in batch])
+    RL_train_net!(NN, batch, top_selection)
+end
+
+
+plot(reward_metric, ylabel="average reward", xlabel="batch")
+
+
+
+
+#
+# # training_iterations, batch_size, simulation_time, network_layer, neurons
+# l1_states = state_metric[end, 1, :, 1, :][1]
+# l2_states = state_metric[end, 1, :, 2, :][1]
+# l3_states = state_metric[end, 1, :, 3, :][1]
+# l4_states = state_metric[end, 1, :, 4, :][1]
+# l5_states = state_metric[end, 1, :, 5, :][1]
+# l6_states = state_metric[end, 1, :, 6, :][1]
+#
+# plot([l1_states, l2_states, l3_states, l4_states, l5_states, l6_states])
