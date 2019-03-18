@@ -24,3 +24,9 @@
 #
 #           spatial_backward_update!(NN, fittest_deriv)
 #
+
+
+
+
+
+# remember @inbound for performance improvement
