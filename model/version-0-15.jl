@@ -1,13 +1,11 @@
-# version akeen to 0-11
-# more general function strucutre
-# replaces v0-11
+# version 0-15 : same as 0-14 but for classification
 
 include("..\\global_utility_functions\\activation_functions.jl")
 include("..\\global_utility_functions\\loss_functions.jl")
 using Distributions
 using MLDatasets
 using Plots
-using OpenAIGym
+# using OpenAIGym
 using StatsBase
 using Random
 
@@ -130,10 +128,13 @@ function reset_states!(NN)
     end
 end
 
-function reset_buffer!(BN)
+function reset_buffer!(BN, buffer_length)
     for l in BN
-        for bi in eachindex(l)
-            l[bi] .= 0.
+        for i in 1:buffer_length
+            l.X_b[i] .= 0.
+            l.S_b[i] .= 0.
+            l.W_b[i] .= 0.
+            l.H_b[i] .= 0.
         end
     end
 end
@@ -221,89 +222,24 @@ function create_layer(input_size, output_size, buffer_length, weight_range, hidd
     Layer(init_states, init_weights, init_hidden, init_thresholds), Buffer(x_buf, s_buf, w_buf, h_buf)
 end
 
-function cross_entropy_learning!(NN, batch; top_select=3, hidden_range=(0.5, 0.99))
-    rew = [b[1] for b in sort(batch)][end-top_select:end]
-    best = [b[2] for b in sort(batch)][end-top_select:end]
-    # println("best selection: $rew")
-    for b in best
-        for (s, a) in b
-            out, net_states = forward!(Array(s), NN, BN)
-            update_states!(NN, net_states)
 
+train_x, train_y = MNIST.traindata()
+test_x, test_y = MNIST.testdata()
+onehot = Array{FloatN}(I, 10, 10)
 
-            pa = sigmoid.(out) .+ 0.0000001 # for non zero predictions
-            loss = crossentropy(pa, a)
-            dE = d_crossentropy(pa, a)
-
-            dEdSig = dE .* d_sigmoid.(out)
-
-
-            derivs = get_derivs(NN, BN, buffer_length, dEdSig)
-
-            backward!(NN, derivs, lr=lr, H_trunc=hidden_range)
-        end
-    end
-end
-
-function cross_entropy_learning!(NN, batch, buffer_length; top_percentile=0.5, hidden_range=(0.5,0.99))
-    rew = [b[1] for b in batch]
-    best = [b[2] for b in batch if b[1] > (maximum(rew)*(1-top_percentile))]
-    best_rewards = rew[rew .> (maximum(rew)*(1-top_percentile))]
-
-    println("best $(length(best_rewards)) = $best_rewards")
-    for b in shuffle(best)
-        for (i, (s, a)) in enumerate(b)
-            out, _ = forward!(Array(s), NN, BN)
-
-            # if i % buffer_length == 0 # from version 0-13
-            pa = softmax(out)
-            loss = crossentropy(pa, a)
-            dE = d_crossentropy(pa, a)
-            dEdAct = d_softmax(out) * dE
-            derivs = get_derivs(NN, BN, buffer_length, dEdAct)
-
-            # println("pred: $pa\t:::\tdE: $dE\t:::\tout: $out")
-            # println(derivs[1])
-
-            backward!(NN, derivs, lr=lr, H_trunc=hidden_range)
-
-            # sleep(0.3)
-            # end
-        end
-    end
-    return length(rew)
-end
-
-
-# cross entropy methode
-# describing:
-# - model free
-# - policy based
-# - on policy
-
-env = GymEnv(:CartPole, :v0)
-# env = GymEnv(:Acrobot, :v1)
-
-action_index = [i for i in 1:length(env.actions)]
-action_space = one(action_index*action_index')
-
-
-input_size = length(env.state)^2
-output_size = length(env.actions)
-buffer_length = 5
-lr=0.002
+input_size = length(train_x[:, :, 1])
+output_size = 10
+buffer_length = 7
 # h_truncate = (0.85, 0.999)
-weight_init_range = (-1.5, 1.5)
-hidden_init_range = (0.3, 0.99)
-threshold = 1
-hidden_sizes = ()
+hidden_init_range = (0.8, 0.99)
+threshold = 0.5
+hidden_sizes = (400,300,200,100)
 
-early_reward_accentuation = 1.1
-percentile = 0.06
-training_iterations = 1000
-batch_size = 40
-simulation_time = 100
+weight_init_range = [-0.1, 0.1]
+init_weight_depth_decay = 0.67
 
+lr=0.1
+training_iterations = 300
 
 
 # NETWORK
@@ -311,67 +247,39 @@ hs = (hidden_sizes..., output_size)
 l, b = create_layer(input_size, hs[1], buffer_length, weight_init_range, hidden_init_range, init_thresholds=[threshold for _ in 1:hs[1]])
 NN = [l]; BN = [b]; if hidden_sizes != ()
     for i in eachindex(hs[1:end-1])
+        weight_init_range .*= init_weight_depth_decay
         l, b = create_layer(hs[i], hs[i+1], buffer_length, weight_init_range, hidden_init_range, init_thresholds=[threshold for _ in 1:hs[i+1]])
         append!(NN, [l]); append!(BN, [b])
     end
 end
 
-delta_w, delta_h = [copy(l.W) for l in NN], [copy(l.H) for l in NN]
+loss_metric = [0. for _ in 1:training_iterations]; for k in 1:training_iterations
 
-num_iterations_over_min = [0 for _ in 1:training_iterations]; reward_metric = [0. for _ in 1:training_iterations]; for k in 1:training_iterations
-    batch = []
+    r = rand(axes(train_x, 3))
+    x, y = reshape(train_x[:, :, r], input_size), onehot[train_y[r]+1, :]
 
-    for i in 1:batch_size
-        s = Array(reset!(env))
-        s = reshape(((s * s') .+ 1.), length(s)^2)
-
-        episode_steps = []
-        reward_counter = 0
-
-        for j in 1:simulation_time
-            out, _ = forward!(Array(s), NN, BN)
-
-            a_prob = Weights(softmax(out))
-            a = sample(action_index, a_prob)
-
-            # println("out: $out\nstates:\n$(NN[end].S)\n$(NN[end-1].S)\n$(NN[1].S)\nweights:\n$(NN[end].W)\n$(NN[end-1].W)\nhidden:\n$(NN[end].H)")
-            # println(["$sb\n" for sb in b2.S_b]...)
-            # println(l2.W)
-            # sleep(0.3)
-
-            # if NN[end].S > NN[end].THR
-            #     println("out = $out\naction = $a\nstates = $(NN[end].S)\n$(NN[end-1].S)\n$(NN[1].S)\nhidden = $(NN[end].H)\n$(NN[end-1].H)\n$(NN[1].H)")
-            #     sleep(1)
-            # end
-
-            # println("input      : ", BN[end].X_b[1])
-            # println("old states : ", NN[end].S)
-            # println("activ      : ", out, "\n")
-
-            append!(episode_steps, [Pair(Array(s), action_space[a, :])])
-            r, s = step!(env, env.actions[a])
-            s = reshape(((Array(s) * Array(s')) .+ 1.), length(s)^2)
-
-            reward_counter = reward_counter * early_reward_accentuation + r
-
-            # render(env)
-
-            if env.done
-                append!(batch, [Pair(reward_counter, episode_steps)])
-                break
-            end
-        end
-        reset_states!(NN)
+    reset_states!(NN)
+    reset_buffer!(BN, buffer_length)
+    final_out = [0. for _ in 1:output_size]
+    for rep in 1:buffer_length
+        out, _ = forward!(x, NN, BN)
+        final_out .+= out
     end
-    println("batch $k finished")
-    println("avg_reward = $(mean([b[1] for b in batch]))")
-    reward_metric[k] = mean([b[1] for b in batch])
-    num_iterations_over_min[k] = cross_entropy_learning!(NN, batch, buffer_length; top_percentile=percentile, hidden_range=hidden_init_range)
+
+    pred    = onehot[argmax(softmax(final_out)), :]
+    loss    = crossentropy(pred .+ 0.0000001, y)
+    dloss   = d_crossentropy(pred .+ 0.0000001, y)
+    dldsoft = d_softmax(final_out) * dloss
+
+    derivs = get_derivs(NN, BN, buffer_length, dldsoft)
+    backward!(NN, derivs, lr=lr)
+
+    println("iteration:\t$k\nloss:\t$loss\nfinal_out:\t$final_out\navg_s_l1:\t$(mean(NN[1].S))\navg_s_ll\t$(mean(NN[end].S))")
+
+    loss_metric[k] = loss
 end
 
-delta_w, delta_h = [delta_w[i] .- NN[i].W for i in eachindex(NN, delta_w)], [delta_h[i] .- NN[i].H for i in eachindex(NN, delta_h)]
-println(delta_w)
-println(delta_h)
 
-plot(reward_metric./maximum(reward_metric), ylabel="maximum reward", xlabel="batch")
+
+plot(loss_metric, ylabel="loss", xlabel="iterations")
 # plot(num_iterations_over_min, ylabel="reward over $minimum_acceptable_reward", xlabel="batch")
