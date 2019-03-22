@@ -24,20 +24,15 @@ mutable struct NeuroTransmitter # small possitive or small negative
     strength::FloatN
 end
 
-mutable struct AllCell
-    cell::Union{AxonPoint, Dendrite, Synaps}
+mutable struct Dendrite
+    possition::Possition
+    force::Force # influence by, for example, neurotransmitters
 end
 
-mutable struct Neuron
+mutable struct AxonPoint
     possition::Possition
     force::Force
-    priors::Array{Union{Missing, AllCell}, 1}
-    posterior::Array{Union{Missing, AllCell}, 1}
-    NT::NeuroTransmitter # NT for different functionalities
-
-    fitness::FloatN
 end
-
 
 mutable struct Synaps
     possition::Possition
@@ -53,17 +48,21 @@ mutable struct Synaps
     numActivation::Integer
 end
 
-mutable struct Dendrite
-    possition::Possition
-    force::Force # influence by, for example, neurotransmitters
+mutable struct AllCell
+    cell::Union{AxonPoint, Dendrite, Synaps}
 end
 
-mutable struct AxonPoint
+mutable struct Neuron
     possition::Possition
     force::Force
+    priors::Array{Union{Missing, AllCell}, 1}
+    posterior::Array{Union{Missing, AllCell}, 1}
+    NT::NeuroTransmitter # NT for different functionalities
+
+    lifeTime::FloatN
+    lifeDecay::FloatN
+    fitness::FloatN
 end
-
-
 
 mutable struct InputNode
     possition::Possition
@@ -123,23 +122,11 @@ function S_update_dendrite!(D::Dendrite)
     D.possition += D.force
     return nothing
 end
-function V_update_synaps!(syn::Synaps, input::FloatN)
-    decay_charge!(syn)
-    decay_life!(syn)
-    syn.Q += input
-    return nothing
-end
-function activate_synapses!(syn)
-    for s in syn
-        if is_activated(ps)
-            s.Q -= s.THR
-        end
-    end
-end
 
 # ?> function S_update_synaps!(syn::Synaps); end
 function V_update_neuron!(N::Neuron, force::FloatN)
     N.force = force
+    N.lifeTime -= N.lifeDecay
     return nothing
 end
 function S_update_neuron!(N::Neuron)
@@ -150,15 +137,28 @@ end
 function decay_charge!(syn::Synaps)
     syn.Q *= syn.QDecay
 end
-
 function kill_synaps!(syn::Synaps)
     syn = missing
 end
-
 function decay_life!(syn::Synaps)
     syn.lifeTime -= syn.lifeDecay
+    syn.lifeDecay = 0.
     if syn.lifeTime <= 0
         kill_synaps!(syn)
+    end
+end
+function V_update_synaps!(syn::Synaps, input::FloatN, Δlife_decay::FloatN)
+    syn.lifeDecay = life_decay
+    decay_charge!(syn)
+    decay_life!(syn)
+    syn.Q += input
+    return nothing
+end
+function activate_synapses!(syn::Synaps)
+    for s in syn
+        if is_activated(ps)
+            s.Q -= s.THR
+        end
     end
 end
 
@@ -245,7 +245,7 @@ function scalar_distance(p1::Possition, p2::Possition)
     sqrt(sum([p1.x, p1.y, p1.z] .- [p2.x, p2.y, p2.z]).^2)
 end
 
-function as_stdv(var::FloatN)
+function to_stdv(var::FloatN)
     sqrt(var)
 end
 
@@ -267,6 +267,7 @@ end
 
 
 # GENERATOR FUNCTIONS
+
 mutable struct m_v_pair
     mean::FloatN
     variance::FloatN
@@ -303,18 +304,47 @@ end
 
 mutable struct NeuronDNA
     possition::InitializationPossition
-    LifeTime::min_max_pair
+    lifeTime::min_max_pair
     num_priors::min_max_pair
     num_posteriors::min_max_pair
     neuroTransmitter::NeuroTransmitter
 end
+
+function unfold(dna::SynapsDNA, possition::FloatN, NT::NeuroTransmitter)::Synaps
+    q_dec = rand(Normal(dna.QDecay.mean, to_stdv(dna.QDecay.variance)))
+    thr = rand(Normal(dna.THR.mean, to_stdv(dna.THR.variance)))
+    lifetime = rand(dna.LifeTime.min:dna.LifeTime.max)
+    return Synaps(possition, 0., q_dec, thr, NT, lifetime, 0)
+end
+function unfold(dna::NeuronDNA, possition::FloatN, NT::NeuroTransmitter)::Neuron
+    lifetime = rand(dna.lifeTime.min:dna.lifeTime.max)
+    num_priors = (dna.num_priors.min:dna.num_priors.max)
+    num_posteriors = (dna.num_posteriors.min:dna.num_posteriors.max)
+    return Neuron(possition, Force(0,0,0,0), [missing for _ in 1:num_priors], [missing for _ in 1:num_posteriors], NT, lifetime, 0)
+end
+
+
+
+# CONTROL FUNCTIONS
+function addDendrite!(N::Neuron, dna::DendriteDNA); end
+function addAxonPoint!(N::Neuron, dna::AxonPointDNA); end
+    # add axon point and add N.NT reference to it
+end
+
 
 
 # VALIDATION FUNCTIONS
 function validateDNA!(NDNA::NeuronDNA, maxLifeTime::FloatN)
     clamp!(NDNA.LifeTime.min, 1, maxLifeTime-1)
     clamp!(NDNA.LifeTime.max, NDNA.LifeTime.min, maxLifeTime)
-
 end
 
-function validateInRangeInitialization!()
+function validateInRangeInitialization!(pos::Possition, network_range::FloatN)
+end
+
+
+
+# TESTING
+t_NT = NeuroTransmitter(1)
+
+t_neu = Neuron(Possition(0,0,0), Force(0,0,0,0), [missing for _ in 1:10], [missing for _ in 1:3], t_NT, 0)
