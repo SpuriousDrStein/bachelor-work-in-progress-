@@ -34,6 +34,7 @@ end
 mutable struct NeuroTransmitter # small possitive or small negative
     # addition for future versions --> have a function that gets the specific Synaps -> for (propergate, disperse, etc...)
     strength::FloatN
+    dispersion_range::FloatN
 end
 mutable struct Dendrite
     possition::Possition
@@ -45,7 +46,9 @@ mutable struct AxonPoint
     possition::Possition
     max_length::FloatN
     force::Force
-    liefTime::Integer
+
+    liefeTime::Integer
+    lifeDecay::Integer
 end
 mutable struct Synaps
     possition::Possition
@@ -55,8 +58,8 @@ mutable struct Synaps
     NT::NeuroTransmitter # NT for different functionalities
 
     # values to manage synaps life cycles
-    lifeTime::FloatN
-    lifeDecay::FloatN
+    lifeTime::Integer
+    lifeDecay::Integer
 
     numActivation::Integer
 end
@@ -66,13 +69,17 @@ end
 mutable struct Neuron
     possition::Possition
     force::Force
+    Q::FloatN
     priors::Array{Union{Missing, AllCell}, 1}
-    posterior::Array{Union{Missing, AllCell}, 1}
+    posteriors::Array{Union{Missing, AllCell}, 1}
     NT::NeuroTransmitter # NT for different functionalities
 
-    lifeTime::FloatN
-    lifeDecay::FloatN
+    lifeTime::Integer
+    lifeDecay::Integer
     fitness::FloatN
+
+    # monitoring
+    id::Integer
 end
 mutable struct InputNode
     possition::Possition

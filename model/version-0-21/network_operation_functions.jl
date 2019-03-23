@@ -47,13 +47,27 @@ function V_update_synaps!(syn::Synaps, input::FloatN, Δlife_decay::FloatN)
     syn.Q += input
     return nothing
 end
-function activate_synapses!(syn::Synaps)
-    for s in syn
-        if is_activated(ps)
-            s.Q -= s.THR
-        end
+function activate_synaps!(syn::Synaps)
+    if (s.Q - s.THR) < 0
+        throw("unexpected behaviour |> calling activation without threshold reached")
+    else
+        s.Q -= s.THR
+        s.numActivation += 1
+        return copy(s.THR)
     end
 end
+
+function reset_synaps!(syn::Synaps)
+    syn.Q = 0.
+end
+
+# function disperse!(charge::FloatN, region::Subnet, synapses::Array{Synaps})
+#     valid_syns = get_synapses_in_range(region.possition, region.range, synapses)
+#     for i in eachindex(valid_syns)
+#         valid_syns[i].Q += charge/length(valid_syns)
+#         # redraw NT
+#     end
+# end
 
 
 # # test fuse function
@@ -82,15 +96,26 @@ end
 
 
 
-# PROPERGATION FUNCTIONS
-function propergate!(N::Neuron, input_accumulate_f::Function)
-    input_v = get_neuron_input_vector(N)
-    println(typeof(input_v), input_v)
-    a = input_accumulate_f(input_v)
-    prior_activatable = get_activateable_synapses(get_all_prior_synapses(N))
-    disperse!(prior_activatable)
-    reset_synapses!(prior_activatable)
+# Main LOOP FUNCTIONS
+function Base.accumulate!(N::Neuron, accumulate_f::Function, )::Array{Tuple{FloatN, Array{Synaps}}}
+    input_syns = get_activatable_prior_synapses(N)
+    input_v = [activate_synaps!(s) for s in input_syns]
+    if input_v != []
+        N.Q = accumulate_f(input_v)
+    else
+        N.Q = 0.
+    end
 
-    posterior_synapses = get_all_posterior_synapses(N)
+    dispersion = [(is.NT.strength => get_synapses_in_range(Subnet(is.possition), all_synapses_for_dispersion)) for is in input_syns]
+    # basicly stores array of: Q-effect -> effected synapses
+
+    reset_synaps!.(input_syns)
+    return input_syns, dispersion
+end
+
+function propergate!(N::Neuron)
+
+    posterior_synapses = get_all_post_synapses(N)
     V_update_synaps!.(posterior_synapses, a/length(posterior_synapses))
+    return nothing
 end

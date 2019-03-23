@@ -19,11 +19,15 @@ d_dna = DendriteDNA(pos1, length1, life1)
 s_dna = SynapsDNA(dec1, thr1, life1)
 n_dna = NeuronDNA(pos1, life1, num_pri_post, num_pri_post)
 
-N1 = unfold(n_dna, t_nt, 1)
+N1 = unfold(n_dna, t_nt, FloatN(1.)); println(N1.priors)
 
-N1.priors[ismissing.(N1.priors)]
+addDendrite!(N1, d_dna)
 
-addDendrite!(N1, )
+for d in eachindex(N1.priors) # SynapsDNA, Possition, NeuroTransmitter, life_decay::FloatN
+    N1.priors[d] = AllCell(unfold(s_dna, N1.priors[d].cell.possition, t_nt, 0))
+end
+
+N1.priors[1].cell
 
 
 propergate!(N1, accf_sum)

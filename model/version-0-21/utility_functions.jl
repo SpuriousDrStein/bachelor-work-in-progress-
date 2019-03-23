@@ -15,30 +15,41 @@ function get_all_axon_points(NN::Network)
     [n.cell for n in NN if typeof(n) == AllCell && typeof(n.cell) == AxonPoint]
 end
 
+function get_dendrites(N::Neuron)
+    [n.cell for n in skipmissing(N.priors) if typeof(n.cell) == Dendrite]
+end
+function get_axon_points(N::Neuron)
+    [n.cell for n in skipmissing(N.posteriors) if typeof(n.cell) == AxonPoint]
+end
+function get_activatable_prior_synapses(N::Neuron)
+    [n.cell for n in skipmissing(N.priors) if typeof(n.cell) == Synaps && is_activated(n.cell)]
+end
+function get_all_prior_synapses(N::Neuron)
+    [n.cell for n in skipmissing(N.priors) if typeof(n.cell) == Synaps]
+end
+function get_activatable_post_synapses(N::Neuron)
+    [n.cell for n in skipmissing(N.posteriors) if typeof(n.cell) == Synaps && is_activated(n.cell)]
+end
+function get_all_post_synapses(N::Neuron)
+    [n.cell for n in skipmissing(N.posteriors) if typeof(n.cell) == Synaps]
+end
 function get_neuron_input_vector(N::Neuron)
     [s.cell.NT(s.cell.Q) for s in skipmissing(N.priors) if typeof(s.cell) == Synaps && is_activated(s.cell)]
 end
-function get_all_prior_dendrites(N::Neuron)
-    [n.cell for n in N.prior if typeof(n.cell) == Dendrite]
-end
-function get_all_posterior_dendrites(N::Neuron)
-    [n.cell for n in N.posterior if typeof(n.cell) == Dendrite]
-end
-function get_all_axon_points(N::Neuron)
-    [n.cell for n in NN.posterior if typeof(n.cell) == AxonPoint]
-end
-function get_activateable_synapses(N::Neuron)
-    [is_activated(n.cell) for n in N.prior if typeof(n.cell) == Dendrite]
-end
 
-function get_neurons_in_range(possition::Possition, range::FloatN, neuron_collection::Array{Neuron})
-    den_collection[[scalar_distance(n.possition, possition) < range for n in neuron_collection]]
+
+
+function get_neurons_in_subnet(subnet::Subnet, neuron_collection::Array{Neuron})
+    den_collection[[scalar_distance(n.possition, subnet.possition) < subnet.range for n in skipmissing(neuron_collection)]]
 end
-function get_dendrites_in_range(possition::Possition, range::FloatN, den_collection::Array{Dendrite})
-    den_collection[[scalar_distance(dp.possition, possition) < range for dp in den_collection]]
+function get_dendrites_in_subnet(subnet::Subnet, den_collection::Array{Dendrite})
+    den_collection[[scalar_distance(dp.possition, subnet.possition) < subnet.range for dp in skipmissing(den_collection)]]
 end
-function get_axon_points_in_range(possition::Possition, range::FloatN, ap_collection::Array{AxonPoint})
-    ap_collection[[scalar_distance(ap.possition, possition) <= range for ap in ap_collection]]
+function get_axon_points_in_subnet(subnet::Subnet, ap_collection::Array{AxonPoint})
+    ap_collection[[scalar_distance(ap.possition, subnet.possition) <= subnet.range for ap in skipmissing(ap_collection)]]
+end
+function get_synapses_in_subnet(subnet::Subnet, syn_collection::Array{Synaps})
+    syn_collection[[scalar_distance(syn.possition, subnet.possition) <= subnet.range for syn in skipmissing(syn_collection)]]
 end
 
 
