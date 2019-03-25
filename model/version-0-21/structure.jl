@@ -1,46 +1,40 @@
 # GENERAL STRUCTURES
 FloatN = Float32
-
 mutable struct Possition
     x::FloatN
     y::FloatN
     z::FloatN
 end
-
 mutable struct Force # identity vector with a force
     x::FloatN
     y::FloatN
     z::FloatN
     strength::FloatN
 end
-
+mutable struct m_v_pair
+    mean::FloatN
+    variance::FloatN
+end
+mutable struct min_max_pair
+    min::Number
+    max::Number
+end
 mutable struct InitializationPossition
     x::m_v_pair
     y::m_v_pair
     z::m_v_pair
 end
 
-mutable struct m_v_pair
-    mean::FloatN
-    variance::FloatN
-end
-
-mutable struct min_max_pair
-    min::Number
-    max::Number
-end
-
-
-
-
 
 # NETWORK STRUCTURES
 mutable struct NeuroTransmitter # small possitive or small negative
-    fingerprint::String
+    # fingerprint::String
 
     # change at t
     strength::FloatN
-    dispersion_region::Subnet
+    dispersion_region::Possition # range given by strength of activation leftover
+    range_scale::FloatN # how much the input is scaled to calculate the range
+    retain_percentage::FloatN # how much of the old value is retained when influenced by new neuro transmitters
 end
 
 mutable struct Dendrite
@@ -50,8 +44,8 @@ mutable struct Dendrite
 
     # change at t
     possition::Possition
-    force::Force
-    lifeDecay::Integer
+    # force::Force
+    # lifeDecay::Integer
 end
 
 mutable struct AxonPoint
@@ -77,8 +71,7 @@ mutable struct Synaps
     # change at t
     Q::FloatN
     possition::Possition
-    # NTs::Array{NeuroTransmitter}
-    NT::NeuroTransmitter
+    NT::NeuroTransmitter # NTs::Array{NeuroTransmitter}
     updated::Bool
 
     # # deltas
@@ -130,15 +123,16 @@ end
 mutable struct Network
     # constants
     size::FloatN
-    maxNeuronLifeTime::min_max_pair
-    maxSynapsLifeTime::min_max_pair
-    maxDendriteLifeTime::min_max_pair
-    maxAxonPointLifeTime::min_max_pair
-    NeuronAccessDropout::FloatN
+    maxNeuronLifeTime::FloatN
+    maxSynapsLifeTime::FloatN
+    maxDendriteLifeTime::FloatN
+    maxAxonPointLifeTime::FloatN
+    synapsesAccessDropout::FloatN
+    minFuseDistance::FloatN
 
     # change at t
-    enteries::Array{Union{AllCell, Neuron, InputNode, OutputNode}, 1}
-end
+    components::Array{Union{AllCell, Neuron, InputNode, OutputNode}, 1}
+    life_decay::Integer
 end
 
 
@@ -155,9 +149,10 @@ mutable struct AxonPointDNA
     init_pos::InitializationPossition
 end
 mutable struct NeuroTransmitterDNA
-    fingerprint::String
-    strength::m_v_pair
-    dispersion_region::Tuple{InitializationPossition, m_v_pair} # possition range
+    # fingerprint::String
+    init_strength::m_v_pair # mean should be 1 for most "accurate" effect
+    dispersion_region::InitializationPossition
+    retain_percentage
 end
 mutable struct SynapsDNA
     THR::m_v_pair
@@ -169,12 +164,11 @@ end
 mutable struct NeuronDNA
     init_pos::InitializationPossition
     lifeTime::min_max_pair
-    NT::NeuroTransmitter # NT for different functionalities
-    fitness::FloatN
+    NT::NeuroTransmitterDNA # NT for different functionalities
 
-    # deltas
-    force::Force
-    lifeDecay::Integer
+    # # deltas
+    # force::Force
+    # lifeDecay::Integer
 end
 
 mutable struct NetworkDNA

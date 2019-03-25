@@ -5,13 +5,17 @@
 include("structure.jl")
 include("functions.jl")
 
+
+
 # TESTING
-pos1 = get_random_init_possition(FloatN(0.), FloatN(5.))
+pos1 = get_random_init_possition(Possition(0,0,0), FloatN(5.))
 length1 = m_v_pair(40, 20)
 dec1 = m_v_pair(0.5,0.5)
 thr1 = m_v_pair(1,0.5)
 life1 = min_max_pair(200, 2000)
 num_pri_post = min_max_pair(1, 5)
+
+minimum([sample(length1) for j in 1:999999])
 
 t_nt = NeuroTransmitter(1)
 a_dna = AxonPointDNA(pos1, length1, life1)

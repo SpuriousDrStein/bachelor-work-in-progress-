@@ -5,16 +5,21 @@ is_activatable(syn::Synaps) = syn.Q >= syn.THR
 # QUERY FUNCTIONS
 get_all_neurons(NN::Network) = [n for n in NN if typeof(n) == AllCell && typeof(n.cell) == Neuron]
 get_all_input_nodes(NN::Network) = [n for n in NN if typeof(n) == InputNode]
-get_all_outputNodes(NN::Network) = [n for n in NN if typeof(n) == OutputNode]
+get_all_output_nodes(NN::Network) = [n for n in NN if typeof(n) == OutputNode]
 get_all_dendrites(NN::Network) = [n.cell for n in NN if typeof(n) == AllCell && typeof(n.cell) == Dendrite]
 get_all_axon_points(NN::Network) = [n.cell for n in NN if typeof(n) == AllCell && typeof(n.cell) == AxonPoint]
 
-get_dendrites(N::Neuron) = [n.cell for n in skipmissing(N.priors) if typeof(n.cell) == Dendrite]
-get_axon_points(N::Neuron) = [n.cell for n in skipmissing(N.posteriors) if typeof(n.cell) == AxonPoint]
-get_all_prior_synapses(N::Neuron) = [n.cell for n in skipmissing(N.priors) if typeof(n.cell) == Synaps]
-get_all_post_synapses(N::Neuron) = [n.cell for n in skipmissing(N.posteriors) if typeof(n.cell) == Synaps]
-get_activatable_prior_synapses(N::Neuron) = [n.cell for n in skipmissing(N.priors) if typeof(n.cell) == Synaps && n.cell.Q >= n.cell.THR && n.cell.activated == false]
-get_activatable_post_synapses(N::Neuron) = [n.cell for n in skipmissing(N.posteriors) if typeof(n.cell) == Synaps && n.cell.Q >= n.cell.THR && n.cell.activated == false]
+
+get_input_nodes(N::Neuron) = [n.cell for n in skipmissing(N.priors) if typeof(n.cell) == InputNode]
+get_output_nodes(N::Neuron) = [n.cell for n in skipmissing(N.posteriors) if typeof(n.cell) == OutputNode]
+
+get_prior_all_cells(N::Neuron) = [n for n in skipmissing(N.priors) if typeof(n) == AllCell]
+get_posterior_all_cells(N::Neuron) = [n for n in skipmissing(N.posteriors) if typeof(n) == AllCell]
+get_dendrites(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == Dendrite]
+get_axon_points(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == AxonPoint]
+get_synapses(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == Synaps]
+
+get_activatable_synapses(N::Array{Synaps}) = [s for s in N if  s.Q >= s.THR]
 
 get_neurons(subnet::Subnet, neuron_collection::Array{Neuron}) = [n for n in skipmissing(neuron_collection) if distance(n.possition, subnet.possition) < subnet.range]
 get_dendrites(subnet::Subnet, den_collection::Array{Dendrite}) = [d for d in skipmissing(den_collection) if distance(d.possition, subnet.possition) < subnet.range]
@@ -35,7 +40,7 @@ function get_random_init_possition(center::Possition, range::FloatN)
 end
 
 function sample(init_pos::InitializationPossition)
-    Possition(rand(Normal(init_pos.x.mean, init_pos.x.variance)), rand(Normal(init_pos.y.mean, init_pos.y.variance)), rand(Normal(init_pos.z.mean, init_pos.z.variance)))
+    Possition(rand(Normal(init_pos.x.mean, to_stdv(init_pos.x.variance))), rand(Normal(init_pos.y.mean, to_stdv(init_pos.y.variance))), rand(Normal(init_pos.z.mean, to_stdv(init_pos.z.variance))))
 end
 function sample(min_max::min_max_pair)
     rand(min_max.min:min_max.max)

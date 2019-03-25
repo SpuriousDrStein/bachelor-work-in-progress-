@@ -20,3 +20,12 @@ function unfold(dna::NeuronDNA, NT::NeuroTransmitter, life_decay::FloatN; id_cou
     num_posteriors = sample(dna.num_posteriors)
     return Neuron(pos, Force(0,0,0,0), 0., [missing for _ in 1:num_priors], [missing for _ in 1:num_posteriors], NT, lifetime, life_decay, 0, id)
 end
+
+function unfold(dna::NeuroTransmitterDNA, possition::Possition)
+    pos = Subnet(possition, sample(dispersion_region[2]))
+    return NeuroTransmitter(sample(dna.strength), pos)
+end
+function unfold(dna::NeuroTransmitterDNA)
+    pos = Subnet(sample(dispersion_region[1]), sample(dispersion_region[2]))
+    return NeuroTransmitter(sample(dna.strength), pos)
+end
