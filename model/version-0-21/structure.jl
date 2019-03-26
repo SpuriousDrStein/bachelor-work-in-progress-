@@ -72,7 +72,6 @@ mutable struct Synaps
     Q::FloatN
     possition::Possition
     NT::NeuroTransmitter # NTs::Array{NeuroTransmitter}
-    updated::Bool
 
     # # deltas
     # lifeDecay::Integer
@@ -127,7 +126,7 @@ mutable struct Network
     maxSynapsLifeTime::FloatN
     maxDendriteLifeTime::FloatN
     maxAxonPointLifeTime::FloatN
-    synapsesAccessDropout::FloatN
+    # synapsesAccessDropout::FloatN
     minFuseDistance::FloatN
 
     # change at t
@@ -152,19 +151,20 @@ mutable struct NeuroTransmitterDNA
     # fingerprint::String
     init_strength::m_v_pair # mean should be 1 for most "accurate" effect
     dispersion_region::InitializationPossition
-    retain_percentage
+    dispersion_strength_scale::m_v_pair
+    retain_percentage::m_v_pair
 end
 mutable struct SynapsDNA
     THR::m_v_pair
     QDecay::m_v_pair
     lifeTime::min_max_pair
-    init_pos::InitializationPossition
-    NTs::NeuroTransmitterDNA
+    NT::NeuroTransmitterDNA
 end
 mutable struct NeuronDNA
     init_pos::InitializationPossition
+    max_num_priors::min_max_pair
+    max_num_posteriors::min_max_pair
     lifeTime::min_max_pair
-    NT::NeuroTransmitterDNA # NT for different functionalities
 
     # # deltas
     # force::Force
@@ -179,5 +179,5 @@ mutable struct NetworkDNA
     maxDendriteLifeTime::min_max_pair
     maxAxonPointLifeTime::min_max_pair
 
-    NeuronAccessDropout::FloatN # dropout probability for unspecific neuron selections (1 for early tests)
+    # NeuronAccessDropout::FloatN # dropout probability for unspecific neuron selections (1 for early tests)
 end

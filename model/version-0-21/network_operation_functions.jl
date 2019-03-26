@@ -92,7 +92,6 @@ function value_step!(NN::Network, input::Array)
         else
             updateQ!(s)
         end
-        decay_life!(s, NN.life_decay)
 
         dispersion_value, n = get(dispersion_collection, s, (1, 1))
         avg_NT_change = dispersion_value/n
@@ -103,6 +102,13 @@ function value_step!(NN::Network, input::Array)
         propergate!(n)
     end
 end
+function state_step!(NN::Network)
+    # update spatial relation
+    # - decay_life!(s, NN.life_decay)
+    # - fuse!
+    # - split!
+end
+
 
 # STRUCTURE GENERATION FUNCTIONS
 function fuse!(den::AllCell, ap::AllCell, to::Synaps)
@@ -128,6 +134,7 @@ function addAxonPoint!(N::Neuron, apDNA::AxonPointDNA)
         for i in eachindex(N.posteriors)
             if ismissing(N.posteriors[i])
                 N.posteriors[i] = AllCell(unfold(apDNA))
+                return nothing
             end
         end
     end

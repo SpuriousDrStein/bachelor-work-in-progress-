@@ -5,33 +5,40 @@
 include("structure.jl")
 include("functions.jl")
 
-
+N_id = 0
+S_id = 0
 
 # TESTING
-pos1 = get_random_init_possition(Possition(0,0,0), FloatN(5.))
+pos1 = get_random_init_sub_possition(Possition(0,0,0), FloatN(10.), FloatN(2.))
+
 length1 = m_v_pair(40, 20)
-dec1 = m_v_pair(0.5,0.5)
-thr1 = m_v_pair(1,0.5)
+m0_5 = m_v_pair(0.5,0.5)
+m1 = m_v_pair(1,0.5)
+
 life1 = min_max_pair(200, 2000)
 num_pri_post = min_max_pair(1, 5)
 
-minimum([sample(length1) for j in 1:999999])
 
-t_nt = NeuroTransmitter(1)
-a_dna = AxonPointDNA(pos1, length1, life1)
-d_dna = DendriteDNA(pos1, length1, life1)
-s_dna = SynapsDNA(dec1, thr1, life1)
-n_dna = NeuronDNA(pos1, life1, num_pri_post, num_pri_post)
+t_nt = NeuroTransmitterDNA(m1, pos1, m1 ,m0_5)
+a_dna = AxonPointDNA(length1, life1, pos1)
+d_dna = DendriteDNA(length1, life1, pos1)
+s_dna = SynapsDNA(m0_5, m0_5, life1, t_nt)
+n_dna = NeuronDNA(pos1, num_pri_post, num_pri_post, life1)
 
-N1 = unfold(n_dna, t_nt, FloatN(1.)); println(N1.priors)
+unfold(t_nt)
+
+N1 = unfold(n_dna, copy(N_id))
+N2 = unfold(n_dna, copy(N_id)+1)
+
 
 addDendrite!(N1, d_dna)
+addAxonPoint!(N1, a_dna)
+addDendrite!(N2, d_dna)
+addAxonPoint!(N2, a_dna)
+input_node = InputNode(Possition(-10,-10,-10), 0.)
+out_node = OutputNode(Possition(10,10,10), 0.)
 
-for d in eachindex(N1.priors) # SynapsDNA, Possition, NeuroTransmitter, life_decay::FloatN
-    N1.priors[d] = AllCell(unfold(s_dna, N1.priors[d].cell.possition, t_nt, 0))
-end
 
-N1.priors[1].cell
-
+NN = Network([N1, N1.priors..., N1.posteriors..., N2, N2.priors..., N2.posteriors..., input_node, out_node])
 
 propergate!(N1, accf_sum)

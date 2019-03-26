@@ -36,7 +36,11 @@ distance(p1::Possition, p2::Possition) = sqrt(sum([p1.x, p1.y, p1.z] .- [p2.x, p
 
 # INITIALIZATION SAMPELING
 function get_random_init_possition(center::Possition, range::FloatN)
-    InitializationPossition(m_v_pair(center.x, range), m_v_pair(center.y, range), m_v_pair(center.z, range))
+    return InitializationPossition(m_v_pair(center.x, range), m_v_pair(center.y, range), m_v_pair(center.z, range))
+end
+function get_random_init_sub_possition(center::Possition, range::FloatN, sub_sample_range::FloatN)
+    sub_pos = sample(get_random_init_possition(center, range))
+    return get_random_init_possition(sub_pos, sub_sample_range)
 end
 
 function sample(init_pos::InitializationPossition)
@@ -49,6 +53,45 @@ function sample(m_v::m_v_pair)
     rand(Normal(m_v.mean, to_stdv(m_v.variance)))
 end
 
+
+# DNA GENERATOR FUNCTIONS
+function unfold(dna::DendriteDNA)
+    return Dendrite(sample(dna.max_length), sample(dna.lifeTime), sample(dna.init_pos))
+end
+function unfold(dna::SynapsDNA, s_id::Integer, possition::Possition, NT::NeuroTransmitter, life_decay::Integer)::Synaps
+    q_dec = sample(dna.QDecay)
+    thr = sample(dna.THR)
+    lifetime = sample(dna.lifeTime)
+    nt = sample(dna.NT)
+    return Synaps(s_id, thr, q_dec, lifetime, 0, possition, nt)
+end
+function unfold(dna::AxonPointDNA)
+    return AxonPoint(sample(dna.max_length), sample(dna.lifeTime), sample(dna.init_pos))
+end
+function unfold(dna::NeuronDNA, n_id::Integer)::Neuron
+    pos = sample(dna.init_pos)
+    lifetime = sample(dna.lifeTime)
+    num_priors = sample(dna.max_num_priors)
+    num_posteriors = sample(dna.max_num_posteriors)
+    return Neuron(n_id, pos, 0., lifetime, [missing for _ in 1:num_priors], [missing for _ in 1:num_posteriors], 0., 0.)
+end
+function unfold(dna::NeuroTransmitterDNA, init_region_center::Possition)
+    pos = init_region_center + sample(dna.dispersion_region)
+    return NeuroTransmitter(sample(dna.strength), pos)
+end
+function unfold(dna::NeuroTransmitterDNA)
+    pos = sample(dna.dispersion_region)
+    return NeuroTransmitter(sample(dna.init_strength), pos, sample(dna.dispersion_strength_scale), sample(dna.retain_percentage))
+end
+function unfold(dna::NetworkDNA, min_fuse_distance::FloatN, life_decay::Integer, components)
+    size = sample(dna.networkSize)
+    mNlife = sample(dna.maxNeuronLifeTime)
+    mSlife = sample(dna.maxSynapsLifeTime)
+    mDlife = sample(dna.maxDendriteLifeTime)
+    mAlife = sample(dna.maxAxonPointLifeTime)
+
+    return Network(size, mNlife, mSlife, mDlife, mAlife, min_fuse_distance, components, life_decay)
+end
 
 
 # ACCUMULATION FUNCTIONS

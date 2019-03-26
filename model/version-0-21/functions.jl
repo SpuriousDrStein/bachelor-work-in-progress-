@@ -2,11 +2,6 @@ using Distributions
 
 include("utility_functions.jl")
 include("network_operation_functions.jl")
-include("dna_generator_functions.jl")
-
-
-# GLOBAL CONSTANTS
-global N_id_counter = 1
 
 
 # BASE OVERLOAD
