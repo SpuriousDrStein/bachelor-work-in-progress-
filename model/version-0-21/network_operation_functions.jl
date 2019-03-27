@@ -1,9 +1,6 @@
 import Base.accumulate!
 
 # SPATIAL UPDATE FUNCTIONS
-function apply_force!(AP::AxonPoint, force::Force); AP.Possition += force; end
-function apply_force!(D::Dendrite, force::Force);   D.possition += force; end
-function apply_force!(N::Neuron, force::Force);     N.Possition += force; end
 function remove!(syn::Synaps);                      syn = missing; end
 function remove!(den::Dendrite);                    den = missing; end
 function remove!(ao::AxonPoint);                    ap = missing; end
@@ -36,7 +33,7 @@ function updateQ!(syn::Synaps)
     decay_charge!(syn)
     syn.Q *= NT.strength
 end
-function Base.accumulate!(N::Neuron, synapses_for_dispersion::Array{Synaps}, dispersion_collection::Dict{Synaps, Pair{FloatN, Integer}}; accumulate_f=accf_sum)
+function Base.accumulate!(N::Neuron, all_synapses::Array{Synaps}, dispersion_collection::Dict{Synaps, Pair{FloatN, Integer}}; accumulate_f=accf_sum)
     N.Q = 0.
 
     input_syns = get_activatable_synapses(get_synapses(get_prior_all_cells(N)))
@@ -52,38 +49,49 @@ function Base.accumulate!(N::Neuron, synapses_for_dispersion::Array{Synaps}, dis
     for is in input_syns
         if (is.Q - is.THR) < 0.;  throw("Q - THR < 0 in synaps: $(is.id)");  end
 
-        for s in get_synapses_in_range(Subnet(is.NT.dispersion_region, is.NT.range_scale * (is.Q - is.THR)), synapses_for_dispersion)
+        for s in get_synapses_in_range(Subnet(is.NT.dispersion_region, is.NT.range_scale * (is.Q - is.THR)), all_synapses)
             dispersion_collection[s] .+= (s.NT.strength, 1)
         end
     end   # dict of: synaps => neurotransmitter change
 end
-function propergate!(N::Neuron, division_f::Function)
-    post_syns = get_synapses(get_posterior_all_cells(N))
+function propergate!(N::Neuron, sink_list::Array)
+    post_all = get_posterior_all_cells(N)
+    post_syns = get_synapses(post_all)
+    post_aps =  get_axon_points(post_all)
     for s in post_syns
-        s.Q += N.Q/length(post_syns)
+        s.Q += N.Q/length(post_all)
+    end
+    for ap in post_aps
+        append!(sink_list, Sink(ap.possition, N.Q/length(post_all)))
     end
 end
 function NTChange!(syn::Synaps, input_strength::FloatN)
     syn.NT.strength = retination_percentage * syn.NT.strength + (1-syn.NT.retination_percentage) * input_strength
 end
 
-function value_step!(NN::Network, input::Array)
-    neurons = get_all_neurons(NN)
-    dens = get_all_dendrites(NN)
-    APs = get_all_axon_points(NN)
-    syns = get_all_synapses(NN)
+function value_step!(NN::Network, input::Array; accumulate_f=accf_sum)
+    network_all_cells = get_all_all_cells(NN)
+    println(network_all_cells)
     in_nodes = get_all_input_nodes(NN)
     out_nodes = get_all_output_nodes(NN)
+    neurons = get_neurons(network_all_cells)
+    dens = get_dendrites(network_all_cells)
+    APs = get_axon_points(network_all_cells)
+    syns = get_synapses(network_all_cells)
     dispersion_collection = Dict()
 
+    # 1
     in_nodes .= input
 
+    # 2
     println("testing: $dispersion_collection")
     for n in neurons
-        accumulate!(n, dropout(synapses, NN.synapsesAccessDropout), dispersion_collection)
+        # accumulate!(n, dropout(synapses, NN.synapsesAccessDropout), dispersion_collection)
+        accumulate!(n, synapses, dispersion_collection, accumulate_f=accumulate_f)
     end
     println("testing: $dispersion_collection")
 
+    # 3
     # this puts the NT(t-1) into the calculation and then calculates NT(t)
     # this can be reversed
     for s in syns
@@ -98,9 +106,12 @@ function value_step!(NN::Network, input::Array)
         NTChange!(s, avg_NT_change)
     end
 
+    # 4
+    sink_list = [] # array of sinks
     for n in neurons
-        propergate!(n)
+        propergate!(n, sink_list)
     end
+    return sink_list
 end
 function state_step!(NN::Network)
     # update spatial relation

@@ -5,10 +5,12 @@ mutable struct Possition
     y::FloatN
     z::FloatN
 end
-mutable struct Force # identity vector with a force
-    x::FloatN
-    y::FloatN
-    z::FloatN
+mutable struct Surge
+    pos::Possition
+    strength::FloatN
+end
+mutable struct Sink
+    pos::Possition
     strength::FloatN
 end
 mutable struct m_v_pair
@@ -130,7 +132,7 @@ mutable struct Network
     minFuseDistance::FloatN
 
     # change at t
-    components::Array{Union{AllCell, Neuron, InputNode, OutputNode}, 1}
+    components::Array{Union{Missing, AllCell, Neuron, InputNode, OutputNode}, 1}
     life_decay::Integer
 end
 
