@@ -130,6 +130,8 @@ mutable struct Network
     maxAxonPointLifeTime::FloatN
     # synapsesAccessDropout::FloatN
     minFuseDistance::FloatN
+    ap_sink_attractive_force::FloatN # force: AxonPoint's -> ap_sinks
+    neuron_repel_force::FloatN
 
     # change at t
     components::Array{Union{Missing, AllCell, Neuron, InputNode, OutputNode}, 1}
@@ -180,6 +182,8 @@ mutable struct NetworkDNA
     maxSynapsLifeTime::min_max_pair
     maxDendriteLifeTime::min_max_pair
     maxAxonPointLifeTime::min_max_pair
+    ap_sink_force::m_v_pair
+    neuron_repel_force::m_v_pair
 
     # NeuronAccessDropout::FloatN # dropout probability for unspecific neuron selections (1 for early tests)
 end

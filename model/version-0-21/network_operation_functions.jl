@@ -33,7 +33,7 @@ function updateQ!(syn::Synaps)
     decay_charge!(syn)
     syn.Q *= NT.strength
 end
-function Base.accumulate!(N::Neuron, all_synapses::Array{Synaps}, dispersion_collection::Dict{Synaps, Pair{FloatN, Integer}}; accumulate_f=accf_sum)
+function accm!(N::Neuron, all_synapses::Array, dispersion_collection::Dict)
     N.Q = 0.
 
     input_syns = get_activatable_synapses(get_synapses(get_prior_all_cells(N)))
@@ -41,7 +41,7 @@ function Base.accumulate!(N::Neuron, all_synapses::Array{Synaps}, dispersion_col
     input_v = [[s.THR for s in input_syns]..., input_nodes...]
 
     if input_v != []
-        N.Q = accumulate_f(input_v)
+        N.Q = sum(input_v)
     else
         N.Q = 0.
     end
@@ -62,32 +62,42 @@ function propergate!(N::Neuron, sink_list::Array)
         s.Q += N.Q/length(post_all)
     end
     for ap in post_aps
-        append!(sink_list, Sink(ap.possition, N.Q/length(post_all)))
+        append!(sink_list, [Sink(ap.possition, N.Q/length(post_all))])
     end
 end
 function NTChange!(syn::Synaps, input_strength::FloatN)
     syn.NT.strength = retination_percentage * syn.NT.strength + (1-syn.NT.retination_percentage) * input_strength
 end
-
 function value_step!(NN::Network, input::Array; accumulate_f=accf_sum)
     network_all_cells = get_all_all_cells(NN)
-    println(network_all_cells)
     in_nodes = get_all_input_nodes(NN)
     out_nodes = get_all_output_nodes(NN)
-    neurons = get_neurons(network_all_cells)
+    neurons = get_all_neurons(NN)
+
     dens = get_dendrites(network_all_cells)
     APs = get_axon_points(network_all_cells)
     syns = get_synapses(network_all_cells)
     dispersion_collection = Dict()
+    den_sinks = [] # array of dendrite sinks
+    ap_sinks = [] # array of ap sinks
+
+    if neurons == []
+        return []
+    elseif syns == []
+        return [Sink(i_n.possition, i_n.value) for i_n in in_nodes], [Sink(o_n.possition, NN.ap_sink_attractive_force) for o_n in out_nodes]
+    end
+
 
     # 1
-    in_nodes .= input
+    for i in eachindex(in_nodes, input)
+        in_nodes[i].value = input[i]
+    end
 
     # 2
     println("testing: $dispersion_collection")
     for n in neurons
         # accumulate!(n, dropout(synapses, NN.synapsesAccessDropout), dispersion_collection)
-        accumulate!(n, synapses, dispersion_collection, accumulate_f=accumulate_f)
+        accm!(n, syns, dispersion_collection) #all_synapses::Array{Synaps}, dispersion_collection::Dict{Synaps, Pair{FloatN, Integer}}
     end
     println("testing: $dispersion_collection")
 
@@ -107,19 +117,54 @@ function value_step!(NN::Network, input::Array; accumulate_f=accf_sum)
     end
 
     # 4
-    sink_list = [] # array of sinks
     for n in neurons
-        propergate!(n, sink_list)
+        propergate!(n, den_sinks)
     end
-    return sink_list
+    for d in dens
+        append!(ap_sinks, [Sink(d.possition, NN.ap_sink_attractive_force)])
+    end
+
+    return den_sinks, ap_sinks
 end
-function state_step!(NN::Network)
+function state_step!(NN::Network, den_sinks, ap_sinks)
     # update spatial relation
-    # - decay_life!(s, NN.life_decay)
     # - fuse!
     # - split!
-end
+    network_all_cells = get_all_all_cells(NN)
+    in_nodes = get_all_input_nodes(NN)
+    out_nodes = get_all_output_nodes(NN)
+    neurons = get_all_neurons(NN)
 
+    dens = get_dendrites(network_all_cells)
+    APs = get_axon_points(network_all_cells)
+    # syns = get_synapses(network_all_cells)
+
+
+    for den in dens
+
+        total_V = [0.,0.,0.]
+        for d_sink in den_sinks
+            norm_dist_v = normalize(distance(den.possition, d_sink.possition))
+            total_V .+= norm_dist_v .* (1 + d_sink.strength)
+        end
+        decay_life!(den, NN.life_decay)
+    end
+    for ap in APs
+
+
+        for ap_sink in ap_sinks
+
+        end
+        decay_life!(ap, NN.life_decay)
+    end
+    for n1 in neurons
+        for n2 in neurons
+            if n1 !== n2
+                # repel neurons from each other
+            end
+        end
+    end
+end
 
 # STRUCTURE GENERATION FUNCTIONS
 function fuse!(den::AllCell, ap::AllCell, to::Synaps)

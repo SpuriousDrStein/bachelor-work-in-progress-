@@ -6,19 +6,19 @@ is_activatable(syn::Synaps) = syn.Q >= syn.THR
 get_dendrites(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == Dendrite]
 get_axon_points(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == AxonPoint]
 get_synapses(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == Synaps]
-get_neurons(x::Array{Neuron}) = [n.cell for n in x if typeof(n.cell) == Neuron]
-get_activatable_synapses(x::Array{Synaps}) = [s for s in x if  s.Q >= s.THR]
+get_activatable_synapses(x::Array{Synaps}) = [s for s in x if s.Q >= s.THR]
 
-get_all_all_cells(NN::Network) = [n.cell for n in NN.components if typeof(n) == AllCell]
+get_all_all_cells(NN::Network) = [n for n in NN.components if typeof(n) == AllCell]
+get_all_neurons(NN::Network) = [n for n in NN.components if typeof(n) == Neuron]
 get_all_input_nodes(NN::Network) = [n for n in NN.components if typeof(n) == InputNode]
 get_all_output_nodes(NN::Network) = [n for n in NN.components if typeof(n) == OutputNode]
 
 get_input_nodes(N::Neuron) = [n.cell for n in skipmissing(N.priors) if typeof(n.cell) == InputNode]
 get_output_nodes(N::Neuron) = [n.cell for n in skipmissing(N.posteriors) if typeof(n.cell) == OutputNode]
 
+
 get_prior_all_cells(N::Neuron) = [n for n in skipmissing(N.priors) if typeof(n) == AllCell]
 get_posterior_all_cells(N::Neuron) = [n for n in skipmissing(N.posteriors) if typeof(n) == AllCell]
-
 
 get_neurons(subnet::Subnet, neuron_collection::Array{Neuron}) = [n for n in skipmissing(neuron_collection) if distance(n.possition, subnet.possition) < subnet.range]
 get_dendrites(subnet::Subnet, den_collection::Array{Dendrite}) = [d for d in skipmissing(den_collection) if distance(d.possition, subnet.possition) < subnet.range]
@@ -29,8 +29,9 @@ get_synapses(subnet::Subnet, syn_collection::Array{Synaps}) = [syn for syn in sk
 
 # SPATIAL FUNCTIONS
 direction(from::Possition, to::Possition) = [to.x, to.y, to.z] .- [from.x, from.y, from.z]
-distance(p1::Possition, p2::Possition) = sqrt(sum([p1.x, p1.y, p1.z] .- [p2.x, p2.y, p2.z]).^2)
-
+distance(p1::Possition, p2::Possition) = sqrt(sum(direction(p1,p2)^2))
+vector_length(p::Possition) = sqrt(sum([p.x, p.y, p.z].^2))
+normalize(p::Possition) = [p.x, p.y, p.z] ./ vector_length(p)
 
 
 # INITIALIZATION SAMPELING
@@ -88,7 +89,9 @@ function unfold(dna::NetworkDNA, min_fuse_distance::FloatN, init_life_decay::Int
     mSlife = sample(dna.maxSynapsLifeTime)
     mDlife = sample(dna.maxDendriteLifeTime)
     mAlife = sample(dna.maxAxonPointLifeTime)
-    return Network(size, mNlife, mSlife, mDlife, mAlife, min_fuse_distance, components, init_life_decay)
+    sink_force = sample(dna.ap_sink_force)
+    nrf = sample(dna.neuron_repel_force)
+    return Network(size, mNlife, mSlife, mDlife, mAlife, min_fuse_distance, sink_force, nrf, components, init_life_decay)
 end
 
 
