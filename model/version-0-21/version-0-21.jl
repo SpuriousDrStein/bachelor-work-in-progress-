@@ -48,8 +48,10 @@ NN = unfold(NN_dna, min_fuse_distance, init_life_decay, network_components)
 
 den_sinks, ap_sinks = value_step!(NN, [1.])
 
+state_step!(NN, den_sinks, ap_sinks)
+println([d.possition for d in get_dendrites(get_all_all_cells(NN))])
 
-
+println(get_dendrites(get_all_all_cells(NN)))
 
 import Plots
 all_all_cells = get_all_all_cells(NN)

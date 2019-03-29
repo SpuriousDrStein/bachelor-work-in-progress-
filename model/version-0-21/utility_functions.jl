@@ -26,12 +26,13 @@ get_axon_points(subnet::Subnet, ap_collection::Array{AxonPoint}) = [ap for ap in
 get_synapses(subnet::Subnet, syn_collection::Array{Synaps}) = [syn for syn in skipmissing(syn_collection) if distance(syn.possition, subnet.possition) <= subnet.range]
 
 
-
 # SPATIAL FUNCTIONS
 direction(from::Possition, to::Possition) = [to.x, to.y, to.z] .- [from.x, from.y, from.z]
-distance(p1::Possition, p2::Possition) = sqrt(sum(direction(p1,p2)^2))
+distance(p1::Possition, p2::Possition) = sqrt(sum(direction(p1,p2).^2))
 vector_length(p::Possition) = sqrt(sum([p.x, p.y, p.z].^2))
+vector_length(v::Vector) = sqrt(sum(v.^2))
 normalize(p::Possition) = [p.x, p.y, p.z] ./ vector_length(p)
+normalize(v::Vector) = v ./ vector_length(v)
 
 
 # INITIALIZATION SAMPELING

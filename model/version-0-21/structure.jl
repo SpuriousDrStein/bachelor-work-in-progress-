@@ -5,12 +5,12 @@ mutable struct Possition
     y::FloatN
     z::FloatN
 end
-mutable struct Surge
-    pos::Possition
-    strength::FloatN
-end
+# mutable struct Surge
+#     pos::Possition
+#     strength::FloatN
+# end
 mutable struct Sink
-    pos::Possition
+    possition::Possition
     strength::FloatN
 end
 mutable struct m_v_pair

@@ -49,7 +49,7 @@ function accm!(N::Neuron, all_synapses::Array, dispersion_collection::Dict)
     for is in input_syns
         if (is.Q - is.THR) < 0.;  throw("Q - THR < 0 in synaps: $(is.id)");  end
 
-        for s in get_synapses_in_range(Subnet(is.NT.dispersion_region, is.NT.range_scale * (is.Q - is.THR)), all_synapses)
+        for s in get_synapses(Subnet(is.NT.dispersion_region, is.NT.range_scale * (is.Q - is.THR)), all_synapses)
             dispersion_collection[s] .+= (s.NT.strength, 1)
         end
     end   # dict of: synaps => neurotransmitter change
@@ -78,19 +78,20 @@ function value_step!(NN::Network, input::Array; accumulate_f=accf_sum)
     APs = get_axon_points(network_all_cells)
     syns = get_synapses(network_all_cells)
     dispersion_collection = Dict()
-    den_sinks = [] # array of dendrite sinks
-    ap_sinks = [] # array of ap sinks
+    den_sinks = []
+    ap_sinks = [Sink(o_n.possition, NN.ap_sink_attractive_force) for o_n in out_nodes] # array of ap sinks
+
+    # 1
+    for i in eachindex(in_nodes, input)
+        in_nodes[i].value = input[i]
+        append!(den_sinks, [Sink(in_nodes[i].possition, in_nodes[i].value)])
+    end
+
 
     if neurons == []
         return []
     elseif syns == []
         return [Sink(i_n.possition, i_n.value) for i_n in in_nodes], [Sink(o_n.possition, NN.ap_sink_attractive_force) for o_n in out_nodes]
-    end
-
-
-    # 1
-    for i in eachindex(in_nodes, input)
-        in_nodes[i].value = input[i]
     end
 
     # 2
@@ -110,10 +111,13 @@ function value_step!(NN::Network, input::Array; accumulate_f=accf_sum)
         else
             updateQ!(s)
         end
+        decay_life!(s)
 
-        dispersion_value, n = get(dispersion_collection, s, (1, 1))
-        avg_NT_change = dispersion_value/n
-        NTChange!(s, avg_NT_change)
+        if !ismissing(s)
+            dispersion_value, n = get(dispersion_collection, s, (1, 1))
+            avg_NT_change = dispersion_value/n
+            NTChange!(s, avg_NT_change)
+        end
     end
 
     # 4
@@ -139,29 +143,57 @@ function state_step!(NN::Network, den_sinks, ap_sinks)
     APs = get_axon_points(network_all_cells)
     # syns = get_synapses(network_all_cells)
 
-
     for den in dens
-
-        total_V = [0.,0.,0.]
-        for d_sink in den_sinks
-            norm_dist_v = normalize(distance(den.possition, d_sink.possition))
-            total_V .+= norm_dist_v .* (1 + d_sink.strength)
-        end
         decay_life!(den, NN.life_decay)
-    end
-    for ap in APs
-
-
-        for ap_sink in ap_sinks
-
-        end
-        decay_life!(ap, NN.life_decay)
-    end
-    for n1 in neurons
-        for n2 in neurons
-            if n1 !== n2
-                # repel neurons from each other
+        if !ismissing(den)
+            total_v = [0.,0.,0.]
+            for d_sink in den_sinks
+                dir = direction(den.possition, d_sink.possition)
+                mag = NN.minFuseDistance / vector_length(dir)
+                total_v .+= normalize(dir) .* mag .* (1 + d_sink.strength)
             end
+            total_v ./= length(den_sinks)
+
+            den.possition += Possition(total_v...)
+        end
+    end
+
+    for ap in APs
+        decay_life!(ap, NN.life_decay)
+        if !ismissing(ap)
+            total_v = [0.,0.,0.]
+            for ap_sink in ap_sinks
+                dir = direction(ap.possition, ap_sink.possition)
+                mag = NN.minFuseDistance / vector_length(dir)
+                total_v .+= normalize(dir) .* mag .* (1 + ap_sink.strength)
+            end
+            total_v ./= length(ap_sinks)
+
+            ap.possition += Possition(total_v...)
+
+
+            for i_n in in_nodes
+                if distance(ap.possition, i_n.possition) <= NN.minFuseDistance
+                    fuse!(ap, i_n)
+                end
+            end
+            for
+        end
+    end
+
+    if length(neurons) > 1
+        total_v = [[0.,0.,0.] for _ in 1:length(neurons)]
+        for i in eachindex(neurons)
+            local_v = [0.,0.,0.]
+            for n in neurons
+                if neurons[i] !== n
+                     local_v += direction(n.possition, neurons[i].possition)
+                end
+            end
+            total_v[i] = normalize(local_v) ./ (length(neurons) .- 1)
+        end
+        for i in eachindex(total_v, neurons)
+            neurons[i].possition += Possition(total_v[i]...)
         end
     end
 end
