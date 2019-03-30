@@ -7,14 +7,14 @@ get_dendrites(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == Dendr
 get_axon_points(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == AxonPoint]
 get_synapses(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == Synaps]
 get_activatable_synapses(x::Array{Synaps}) = [s for s in x if s.Q >= s.THR]
+get_input_nodes(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == InputNode]
+get_output_nodes(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == OutputNode]
 
 get_all_all_cells(NN::Network) = [n for n in NN.components if typeof(n) == AllCell]
 get_all_neurons(NN::Network) = [n for n in NN.components if typeof(n) == Neuron]
 get_all_input_nodes(NN::Network) = [n for n in NN.components if typeof(n) == InputNode]
 get_all_output_nodes(NN::Network) = [n for n in NN.components if typeof(n) == OutputNode]
 
-get_input_nodes(N::Neuron) = [n.cell for n in skipmissing(N.priors) if typeof(n.cell) == InputNode]
-get_output_nodes(N::Neuron) = [n.cell for n in skipmissing(N.posteriors) if typeof(n.cell) == OutputNode]
 
 
 get_prior_all_cells(N::Neuron) = [n for n in skipmissing(N.priors) if typeof(n) == AllCell]
@@ -33,6 +33,9 @@ vector_length(p::Possition) = sqrt(sum([p.x, p.y, p.z].^2))
 vector_length(v::Vector) = sqrt(sum(v.^2))
 normalize(p::Possition) = [p.x, p.y, p.z] ./ vector_length(p)
 normalize(v::Vector) = v ./ vector_length(v)
+
+
+
 
 
 # INITIALIZATION SAMPELING
@@ -84,7 +87,7 @@ function unfold(dna::NeuroTransmitterDNA)
     pos = sample(dna.dispersion_region)
     return NeuroTransmitter(sample(dna.init_strength), pos, sample(dna.dispersion_strength_scale), sample(dna.retain_percentage))
 end
-function unfold(dna::NetworkDNA, min_fuse_distance::FloatN, init_life_decay::Integer, components)
+function unfold(dna::NetworkDNA, min_fuse_distance::FloatN, init_life_decay::Integer, dna_stack, components)
     size = sample(dna.networkSize)
     mNlife = sample(dna.maxNeuronLifeTime)
     mSlife = sample(dna.maxSynapsLifeTime)
@@ -92,7 +95,8 @@ function unfold(dna::NetworkDNA, min_fuse_distance::FloatN, init_life_decay::Int
     mAlife = sample(dna.maxAxonPointLifeTime)
     sink_force = sample(dna.ap_sink_force)
     nrf = sample(dna.neuron_repel_force)
-    return Network(size, mNlife, mSlife, mDlife, mAlife, min_fuse_distance, sink_force, nrf, components, init_life_decay)
+
+    return Network(size, mNlife, mSlife, mDlife, mAlife, min_fuse_distance, sink_force, nrf, dna_stack, components, init_life_decay, 0, 0)
 end
 
 

@@ -13,6 +13,10 @@ mutable struct Sink
     possition::Possition
     strength::FloatN
 end
+
+
+
+# DNA STRUCTURES
 mutable struct m_v_pair
     mean::FloatN
     variance::FloatN
@@ -26,121 +30,6 @@ mutable struct InitializationPossition
     y::m_v_pair
     z::m_v_pair
 end
-
-
-# NETWORK STRUCTURES
-mutable struct NeuroTransmitter # small possitive or small negative
-    # fingerprint::String
-
-    # change at t
-    strength::FloatN
-    dispersion_region::Possition # range given by strength of activation leftover
-    range_scale::FloatN # how much the input is scaled to calculate the range
-    retain_percentage::FloatN # how much of the old value is retained when influenced by new neuro transmitters
-end
-
-mutable struct Dendrite
-    # constants
-    max_length::FloatN
-    lifeTime::Integer
-
-    # change at t
-    possition::Possition
-    # force::Force
-    # lifeDecay::Integer
-end
-
-mutable struct AxonPoint
-    # constants
-    max_length::FloatN
-    lifeTime::Integer
-
-    # change at t
-    possition::Possition
-
-    # # deltas
-    # lifeDecay::Integer
-    # force::Force
-end
-
-mutable struct Synaps
-    # constants
-    id::Integer
-    THR::FloatN
-    QDecay::FloatN
-    lifeTime::Integer
-
-    # change at t
-    Q::FloatN
-    possition::Possition
-    NT::NeuroTransmitter # NTs::Array{NeuroTransmitter}
-
-    # # deltas
-    # lifeDecay::Integer
-end
-
-mutable struct AllCell
-    cell::Union{AxonPoint, Dendrite, Synaps}
-end
-
-mutable struct Neuron
-    # constants
-    id::Integer
-
-    # change at t
-    possition::Possition
-    Q::FloatN
-    lifeTime::Integer
-    priors::Array{Union{Missing, AllCell}, 1}
-    posteriors::Array{Union{Missing, AllCell}, 1}
-    fitness::FloatN
-    total_fitness::FloatN
-
-    # # deltas
-    # force::Force
-    # lifeDecay::Integer
-end
-mutable struct InputNode
-    # constants
-    possition::Possition
-
-    # changes at t
-    value::FloatN
-end
-
-mutable struct OutputNode
-    # constants
-    possition::Possition
-
-    # changes at t
-    value::FloatN
-end
-
-mutable struct Subnet # may be used for more update by predetermined references or for neurotransmitter dispersion
-    possition::Possition
-    range::FloatN
-end
-
-mutable struct Network
-    # constants
-    size::FloatN
-    maxNeuronLifeTime::FloatN
-    maxSynapsLifeTime::FloatN
-    maxDendriteLifeTime::FloatN
-    maxAxonPointLifeTime::FloatN
-    # synapsesAccessDropout::FloatN
-    minFuseDistance::FloatN
-    ap_sink_attractive_force::FloatN # force: AxonPoint's -> ap_sinks
-    neuron_repel_force::FloatN
-
-    # change at t
-    components::Array{Union{Missing, AllCell, Neuron, InputNode, OutputNode}, 1}
-    life_decay::Integer
-end
-
-
-
-# DNA STRUCTURES
 mutable struct DendriteDNA
     max_length::m_v_pair
     lifeTime::min_max_pair
@@ -174,7 +63,13 @@ mutable struct NeuronDNA
     # force::Force
     # lifeDecay::Integer
 end
-
+mutable struct DNAStack
+    nt_dna_samples::Array{NeuroTransmitterDNA}
+    ap_dna_samples::Array{AxonPointDNA}
+    den_dna_samples::Array{DendriteDNA}
+    syn_dna_samples::Array{SynapsDNA}
+    n_dna_samples::Array{NeuronDNA}
+end
 mutable struct NetworkDNA
     networkSize::m_v_pair
 
@@ -184,6 +79,91 @@ mutable struct NetworkDNA
     maxAxonPointLifeTime::min_max_pair
     ap_sink_force::m_v_pair
     neuron_repel_force::m_v_pair
-
     # NeuronAccessDropout::FloatN # dropout probability for unspecific neuron selections (1 for early tests)
+end
+
+
+# NETWORK STRUCTURES
+mutable struct InputNode
+    possition::Possition
+    value::FloatN
+end
+mutable struct OutputNode
+    possition::Possition
+    value::FloatN
+end
+mutable struct NeuroTransmitter # small possitive or small negative
+    # change at t
+    strength::FloatN
+    dispersion_region::Possition # range given by strength of activation leftover
+    range_scale::FloatN # how much the input is scaled to calculate the range
+    retain_percentage::FloatN # how much of the old value is retained when influenced by new neuro transmitters
+end
+mutable struct Dendrite
+    # constants
+    max_length::FloatN
+    lifeTime::Integer
+
+    # change at t
+    possition::Possition
+end
+mutable struct AxonPoint
+    # constants
+    max_length::FloatN
+    lifeTime::Integer
+
+    # change at t
+    possition::Possition
+
+end
+mutable struct Synaps
+    # constants
+    id::Integer
+    THR::FloatN
+    QDecay::FloatN
+    lifeTime::Integer
+
+    # change at t
+    Q::FloatN
+    possition::Possition
+    NT::NeuroTransmitter # NTs::Array{NeuroTransmitter}
+end
+mutable struct AllCell
+    cell::Union{AxonPoint, Dendrite, Synaps, InputNode, OutputNode}
+end
+mutable struct Neuron
+    # constants
+    id::Integer
+
+    # change at t
+    possition::Possition
+    Q::FloatN
+    lifeTime::Integer
+    priors::Array{Union{Missing, AllCell}, 1}
+    posteriors::Array{Union{Missing, AllCell}, 1}
+    fitness::FloatN
+    total_fitness::FloatN
+end
+mutable struct Subnet # may be used for more update by predetermined references or for neurotransmitter dispersion
+    possition::Possition
+    range::FloatN
+end
+mutable struct Network
+    # constants
+    size::FloatN
+    maxNeuronLifeTime::FloatN
+    maxSynapsLifeTime::FloatN
+    maxDendriteLifeTime::FloatN
+    maxAxonPointLifeTime::FloatN
+    # synapsesAccessDropout::FloatN
+    minFuseDistance::FloatN
+    ap_sink_attractive_force::FloatN # force: AxonPoint's -> ap_sinks
+    neuron_repel_force::FloatN
+    dna_stack::DNAStack
+
+    # change at t
+    components::Array{Union{Missing, AllCell, Neuron}, 1}
+    life_decay::Integer
+    n_id_counter::Integer
+    s_id_counter::Integer
 end
