@@ -12,7 +12,9 @@ dendrite_instantiation_threshold = 3
 axon_point_instantiation_threshold = 4
 fitness_decay = 0.7
 sample_array_length = 4
-
+init_num_neurons = 10
+init_max_priors = 3
+init_max_posteriors = 3
 
 # TESTING
 pos1 = get_random_init_sub_possition(Possition(0,0,0), FloatN(10.), FloatN(2.))
@@ -31,21 +33,12 @@ net_min_max = [min_max_pair(3000,5000), min_max_pair(2000,3000), min_max_pair(10
 dna_stack = DNAStack([t_nt], [a_dna], [d_dna], [s_dna], [n_dna])
 NN_dna = NetworkDNA(m_v_pair(200., 10), net_min_max..., m1, m1)
 
-NN = unfold(NN_dna, min_fuse_distance, init_life_decay, dna_stack, network_components)
+NN = unfold(NN_dna, min_fuse_distance, init_life_decay, dna_stack, [])
+populate_network!(NN, init_num_neurons, init_max_priors, init_max_posteriors)
 
-
-
-N1 = unfold(n_dna, copy(N_id))
-N2 = unfold(n_dna, copy(N_id)+1)
-add_dendrite!(N1, d_dna)
-add_axon_point!(N1, a_dna)
-add_dendrite!(N2, d_dna)
-add_axon_point!(N2, a_dna)
 input_node = AllCell(InputNode(Possition(-5,-5,-5), 0.))
 out_node = AllCell(OutputNode(Possition(5,5,5), 0.))
-network_components = [N1, N1.priors..., N1.posteriors..., N2, N2.priors..., N2.posteriors..., input_node, out_node]
-
-append!(NN.components, network_components)
+append!(NN.components, [input_node, out_node])
 
 
 for i in 1:100
@@ -53,6 +46,8 @@ for i in 1:100
     state_step!(NN, den_sinks, ap_sinks)
     println([d.possition for d in get_dendrites(get_all_all_cells(NN))])
 end
+
+println(get_synapses(get_all_all_cells(NN)))
 
 println(get_dendrites(get_all_all_cells(NN)))
 

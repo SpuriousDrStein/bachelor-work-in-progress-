@@ -1,14 +1,24 @@
 # BASIC
 to_stdv(var::FloatN) = sqrt(var)
 is_activatable(syn::Synaps) = syn.Q >= syn.THR
+has_empty_prior(N::Neuron) = any([ismissing(p) for p in N.priors])
+has_empty_post(N::Neuron) = any([ismissing(p) for p in N.posteriors])
+
 
 # QUERY FUNCTIONS
 get_dendrites(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == Dendrite]
 get_axon_points(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == AxonPoint]
 get_synapses(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == Synaps]
-get_activatable_synapses(x::Array{Synaps}) = [s for s in x if s.Q >= s.THR]
 get_input_nodes(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == InputNode]
 get_output_nodes(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == OutputNode]
+
+get_dendrites_in_all(x::Array{AllCell}) = [n for n in x if typeof(n.cell) == Dendrite]
+get_axon_points_in_all(x::Array{AllCell}) = [n for n in x if typeof(n.cell) == AxonPoint]
+get_synapses_in_all(x::Array{AllCell}) = [n for n in x if typeof(n.cell) == Synaps]
+get_input_nodes_in_all(x::Array{AllCell}) = [n for n in x if typeof(n.cell) == InputNode]
+get_output_nodes_in_all(x::Array{AllCell}) = [n for n in x if typeof(n.cell) == OutputNode]
+
+get_activatable_synapses(x::Array{Synaps}) = [s for s in x if s.Q >= s.THR]
 
 get_all_all_cells(NN::Network) = [n for n in NN.components if typeof(n) == AllCell]
 get_all_neurons(NN::Network) = [n for n in NN.components if typeof(n) == Neuron]
@@ -62,15 +72,14 @@ end
 function unfold(dna::DendriteDNA)
     return Dendrite(sample(dna.max_length), sample(dna.lifeTime), sample(dna.init_pos))
 end
+function unfold(dna::AxonPointDNA)
+    return AxonPoint(sample(dna.max_length), sample(dna.lifeTime), sample(dna.init_pos))
+end
 function unfold(dna::SynapsDNA, s_id::Integer, possition::Possition, NT::NeuroTransmitter, life_decay::Integer)::Synaps
     q_dec = sample(dna.QDecay)
     thr = sample(dna.THR)
     lifetime = sample(dna.lifeTime)
-    nt = sample(dna.NT)
-    return Synaps(s_id, thr, q_dec, lifetime, 0, possition, nt)
-end
-function unfold(dna::AxonPointDNA)
-    return AxonPoint(sample(dna.max_length), sample(dna.lifeTime), sample(dna.init_pos))
+    return Synaps(s_id, thr, q_dec, lifetime, 0, possition, NT)
 end
 function unfold(dna::NeuronDNA, n_id::Integer)::Neuron
     pos = sample(dna.init_pos)

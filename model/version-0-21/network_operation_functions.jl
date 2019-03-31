@@ -40,16 +40,18 @@ function decay_life!(N::Neuron, Δlife::Integer)
 end
 function updateQ!(syn::Synaps)
     decay_charge!(syn)
-    syn.Q *= NT.strength
+    syn.Q *= syn.NT.strength
 end
 function accm!(N::Neuron, all_synapses::Array, dispersion_collection::Dict)
     N.Q = 0.
 
-    input_syns = get_synapses(get_prior_all_cells(N))
+    prior_all = get_prior_all_cells(N)
+    input_syns = get_synapses(prior_all)
 
     if input_syns != []
         input_valid_syns = get_activatable_synapses(input_syns)
-        input_nodes = get_prior_input_nodes(N)
+        input_nodes = get_input_nodes(prior_all)
+
         input_v = [[s.THR for s in input_valid_syns]..., input_nodes...]
 
         if input_v != []
@@ -83,9 +85,6 @@ function propergate!(N::Neuron, sink_list::Array)
     end
 
 end
-function NTChange!(syn::Synaps, input_strength::FloatN)
-    syn.NT.strength = retination_percentage * syn.NT.strength + (1-syn.NT.retination_percentage) * input_strength
-end
 function value_step!(NN::Network, input::Array)
     network_all_cells = get_all_all_cells(NN)
     neurons = get_all_neurons(NN)
@@ -118,7 +117,7 @@ function value_step!(NN::Network, input::Array)
     # println("testing: $dispersion_collection")
 
     # 3
-    # this puts the NT(t-1) into the calculation and then calculates NT(t)
+    # this puts the NT(t-1) and then calculates NT(t)
     # this can be reversed
     if syns != []
         for s in syns
@@ -127,12 +126,14 @@ function value_step!(NN::Network, input::Array)
             else
                 updateQ!(s)
             end
-            decay_life!(s)
+            decay_life!(s, NN.life_decay)
 
             if !ismissing(s)
                 dispersion_value, n = get(dispersion_collection, s, (1, 1))
                 avg_NT_change = dispersion_value/n
-                NTChange!(s, avg_NT_change)
+
+                # change nt
+                s.NT.strength = s.NT.retain_percentage * s.NT.strength + (1-s.NT.retain_percentage) * avg_NT_change
             end
         end
     end
@@ -161,26 +162,26 @@ function state_step!(NN::Network, den_sinks, ap_sinks)
     network_all_cells = get_all_all_cells(NN)
     neurons = get_all_neurons(NN)
 
-    in_nodes = get_input_nodes(network_all_cells)
-    out_nodes = get_output_nodes(network_all_cells)
-    dens = get_dendrites(network_all_cells)
-    APs = get_axon_points(network_all_cells)
+    in_nodes = get_input_nodes_in_all(network_all_cells)
+    out_nodes = get_output_nodes_in_all(network_all_cells)
+    dens = get_dendrites_in_all(network_all_cells)
+    APs = get_axon_points_in_all(network_all_cells)
 
     for den in dens
-        decay_life!(den, NN.life_decay)
-        if !ismissing(den)
+        decay_life!(den.cell, NN.life_decay)
+        if !ismissing(den.cell)
             total_v = [0.,0.,0.]
             for d_sink in den_sinks
-                dir = direction(den.possition, d_sink.possition)
+                dir = direction(den.cell.possition, d_sink.possition)
                 mag = NN.minFuseDistance / vector_length(dir)
                 total_v .+= normalize(dir) .* mag .* (1 + d_sink.strength)
             end
             total_v ./= length(den_sinks)
 
-            den.possition += Possition(total_v...)
+            den.cell.possition += Possition(total_v...)
 
             for o_n in out_nodes
-                if distance(den.possition, o_n.possition) <= NN.minFuseDistance
+                if distance(den.cell.possition, o_n.cell.possition) <= NN.minFuseDistance
                     fuse!(den, o_n)
                 end
             end
@@ -188,30 +189,32 @@ function state_step!(NN::Network, den_sinks, ap_sinks)
     end
 
     for ap in APs
-        decay_life!(ap, NN.life_decay)
-        if !ismissing(ap)
+        decay_life!(ap.cell, NN.life_decay)
+        if !ismissing(ap.cell)
             total_v = [0.,0.,0.]
             for ap_sink in ap_sinks
-                dir = direction(ap.possition, ap_sink.possition)
+                dir = direction(ap.cell.possition, ap_sink.possition)
                 mag = NN.minFuseDistance / vector_length(dir)
                 total_v .+= normalize(dir) .* mag .* (1 + ap_sink.strength)
             end
             total_v ./= length(ap_sinks)
 
-            ap.possition += Possition(total_v...)
+            ap.cell.possition += Possition(total_v...)
 
             for d in dens
-                if distance(ap.possition, d.possition) <= NN.minFuseDistance
-                    nt = unfold(rand(NN.dna_stack.nt_dna_samples))
-                    pos = ap.possition + Possition(direction(ap.possition, d.possition)) / 2
+                if distance(ap.cell.possition, d.cell.possition) <= NN.minFuseDistance
                     # random possition for dispersion
+                    nt = unfold(rand(NN.dna_stack.nt_dna_samples))
 
-                    fuse!(d, ap, unfold(rand(NN.dna_stack.syn_dna_samples), NN.s_id_counter, pos , nt, NN.life_decay))
+                    half_dist = direction(ap.cell.possition, d.cell.possition) ./ 2
+                    pos = ap.cell.possition + Possition(half_dist...)
+
+                    fuse!(d, ap, unfold(rand(NN.dna_stack.syn_dna_samples), copy(NN.s_id_counter), pos , nt, NN.life_decay))
                     NN.s_id_counter += 1
                 end
             end
             for i_n in in_nodes
-                if distance(ap.possition, i_n.possition) <= NN.minFuseDistance
+                if distance(ap.cell.possition, i_n.cell.possition) <= NN.minFuseDistance
                     fuse!(ap, i_n)
                 end
             end
@@ -236,45 +239,60 @@ function state_step!(NN::Network, den_sinks, ap_sinks)
 end
 
 # STRUCTURE GENERATION FUNCTIONS
+function populate_network!(NN::Network, num_neurons, max_num_priors, max_num_post)
+    for n in 1:num_neurons
+        n = unfold(rand(NN.dna_stack.n_dna_samples), copy(NN.n_id_counter))
+        NN.n_id_counter += 1
+        append!(NN.components, [n])
+
+        for _ in 1:rand(1:max_num_priors)
+            add_dendrite!(n, rand(NN.dna_stack.den_dna_samples), NN.components)
+        end
+        for _ in 1:rand(1:max_num_post)
+            add_axon_point!(n, rand(NN.dna_stack.ap_dna_samples), NN.components)
+        end
+    end
+end
 function fuse!(den::AllCell, ap::AllCell, to::Synaps)
     if typeof(den.cell) != Dendrite || typeof(ap.cell) != AxonPoint; throw("incorect fuse!($(typeof(den.cell)), $(typeof(ap.cell)))"); end
     println(" -- warning -- fusion creates duplicate references in the component list of the network")
     den.cell = to
     ap.cell = to
 end
-function fuse!(network_node::Union{InputNode, OutputNode}, ap::AllCell)
-    if typeof(ap.cell) != AxonPoint; throw("incorect fuse!"); end
-    ap.cell = network_node
+function fuse!(network_node::AllCell, ap::AllCell)
+    if typeof(ap.cell) != AxonPoint || typeof(network_node.cell) != InputNode || typeof(network_node.cell) != OutputNode; throw("incorect fuse!($(typeof(ap.cell)), $(typeof(network_node.cell)))"); end
+    ap.cell = network_node.cell
 end
-function fuse!(network_node::Union{InputNode, OutputNode}, den::AllCell)
-    if typeof(den.cell) != Dendrite; throw("incorect fuse!"); end
-    den.cell = network_node
+function fuse!(network_node::AllCell, den::AllCell)
+    if typeof(ap.cell) != AxonPoint || typeof(network_node.cell) != InputNode || typeof(network_node.cell) != OutputNode; throw("incorect fuse!($(typeof(ap.cell)), $(typeof(network_node.cell)))"); end
+    den.cell = network_node.cell
 end
 
 
 # NETWORK ACCESS FUNCTIONS
-function add_dendrite!(N::Neuron, denDNA::DendriteDNA)
-    if any(ismissing.(N.priors))
+function add_dendrite!(N::Neuron, denDNA::DendriteDNA, NN_collection)
+    if has_empty_prior(N)
         for i in eachindex(N.priors)
             if ismissing(N.priors[i])
-                N.priors[i] = AllCell(unfold(denDNA))
+                d = AllCell(unfold(denDNA))
+                N.priors[i] = d
+                append!(NN_collection, [d])
                 return nothing
             end
         end
     end
-    println("no Dendrite added to neuron: $(N.id)")
-    return nothing
 end
-function add_axon_point!(N::Neuron, apDNA::AxonPointDNA)
-    if any(ismissing.(N.posteriors))
+function add_axon_point!(N::Neuron, apDNA::AxonPointDNA, NN_collection)
+    if has_empty_post(N)
         for i in eachindex(N.posteriors)
             if ismissing(N.posteriors[i])
-                N.posteriors[i] = AllCell(unfold(apDNA))
+                ap = AllCell(unfold(apDNA))
+                N.posteriors[i] = ap
+                append!(NN_collection, [ap])
                 return nothing
             end
         end
     end
-    println("no AP added to neuron: $(N.id)")
 end
 function update_fitness!(s::Synaps, activated::Bool, fitness_decay::FloatN)
     s.fitness *= fitness_decay
