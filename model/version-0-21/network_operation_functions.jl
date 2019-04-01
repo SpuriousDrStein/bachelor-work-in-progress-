@@ -1,42 +1,10 @@
 import Base.accumulate!
 
 # SPATIAL UPDATE FUNCTIONS
-function remove!(syn::Synaps);                      syn = missing; end
-function remove!(den::Dendrite);                    den = missing; end
-function remove!(ao::AxonPoint);                    ap = missing; end
-function remove!(n::Neuron)
-    n.posteriors .= missing
-    n.priors .= missing
-    n = missing
-end
 
 # VALUE UPDATE FUNCTIONS
 function decay_charge!(syn::Synaps)
     syn.Q *= syn.QDecay
-end
-function decay_life!(syn::Synaps, Δlife::Integer)
-    syn.lifeTime -= Δlife
-    if syn.lifeTime <= 0
-        remove!(syn)
-    end
-end
-function decay_life!(den::Dendrite, Δlife::Integer)
-    den.lifeTime -= Δlife
-    if den.lifeTime <= 0
-        remove!(den)
-    end
-end
-function decay_life!(ap::AxonPoint, Δlife::Integer)
-    ap.lifeTime -= Δlife
-    if ap.lifeTime <= 0
-        remove!(ap)
-    end
-end
-function decay_life!(N::Neuron, Δlife::Integer)
-    N.lifeTime -= Δlife
-    if N.lifeTime <= 0
-        remove!(N)
-    end
 end
 function updateQ!(syn::Synaps)
     decay_charge!(syn)
@@ -66,7 +34,11 @@ function accm!(N::Neuron, all_synapses::Array, dispersion_collection::Dict)
             end
 
             for s in get_synapses(Subnet(is.NT.dispersion_region, is.NT.range_scale * (is.Q - is.THR)), all_synapses)
-                dispersion_collection[s] .+= (s.NT.strength, 1)
+                if s in keys(dispersion_collection)
+                    dispersion_collection[s] = dispersion_collection[s] .+ (s.NT.strength, 1)
+                else
+                    dispersion_collection[s] = (s.NT.strength, 1)
+                end
             end
         end   # dict of: synaps => neurotransmitter change
     end
@@ -87,69 +59,79 @@ function propergate!(N::Neuron, sink_list::Array)
 end
 function value_step!(NN::Network, input::Array)
     network_all_cells = get_all_all_cells(NN)
-    neurons = get_all_neurons(NN)
+    n_ind = get_all_neuron_indecies(NN)
 
-    in_nodes = get_input_nodes(network_all_cells)
-    out_nodes = get_output_nodes(network_all_cells)
-    dens = get_dendrites(network_all_cells)
-    APs = get_axon_points(network_all_cells)
-    syns = get_synapses(network_all_cells)
+    in_nodes = get_input_nodes_in_all(network_all_cells)
+    out_nodes = get_output_nodes_in_all(network_all_cells)
+    dens = get_dendrites_in_all(network_all_cells)
+    APs = get_axon_points_in_all(network_all_cells)
+    syns = get_synapses_in_all(network_all_cells)
+
     dispersion_collection = Dict()
     den_sinks = []
-    ap_sinks = [Sink(o_n.possition, NN.ap_sink_attractive_force) for o_n in out_nodes] # array of ap sinks
+    ap_sinks = [Sink(o_n.cell.possition, NN.ap_sink_attractive_force) for o_n in out_nodes] # array of ap sinks
 
     # 1
     for i in eachindex(in_nodes, input)
-        in_nodes[i].value = input[i]
-        append!(den_sinks, [Sink(in_nodes[i].possition, in_nodes[i].value)])
+        in_nodes[i].cell.value = input[i]
+        append!(den_sinks, [Sink(in_nodes[i].cell.possition, in_nodes[i].cell.value)])
     end
 
-    if neurons == []
-        return []
+    if get_all_neurons(NN) == []
+        println("exit because no neurons exist")
+        return [], []
     end
 
     # 2
-    # println("testing: $dispersion_collection")
-    for n in neurons
+    println("testing: $dispersion_collection")
+    for n_i in n_ind
         # accumulate!(n, dropout(synapses, NN.synapsesAccessDropout), dispersion_collection)
-        accm!(n, syns, dispersion_collection) #all_synapses::Array{Synaps}, dispersion_collection::Dict{Synaps, Pair{FloatN, Integer}}
+        accm!(NN.components[n_i], get_synapses(syns), dispersion_collection) #all_synapses::Array{Synaps}, dispersion_collection::Dict{Synaps, Pair{FloatN, Integer}}
     end
-    # println("testing: $dispersion_collection")
+    println("testing: $dispersion_collection")
 
     # 3
     # this puts the NT(t-1) and then calculates NT(t)
     # this can be reversed
     if syns != []
         for s in syns
-            if s.Q >= s.THR
-                s.Q = 0.
+            if s.cell.Q >= s.cell.THR
+                s.cell.Q = 0.
             else
-                updateQ!(s)
+                updateQ!(s.cell)
             end
-            decay_life!(s, NN.life_decay)
+            s.cell.lifeTime -= NN.life_decay
+            if s.cell.lifeTime <= 0.
+                s = missing
+            end
 
             if !ismissing(s)
-                dispersion_value, n = get(dispersion_collection, s, (1, 1))
+                dispersion_value, n = get(dispersion_collection, s.cell, (1, 1))
                 avg_NT_change = dispersion_value/n
 
                 # change nt
-                s.NT.strength = s.NT.retain_percentage * s.NT.strength + (1-s.NT.retain_percentage) * avg_NT_change
+                s.cell.NT.strength = s.cell.NT.retain_percentage * s.cell.NT.strength + (1-s.cell.NT.retain_percentage) * avg_NT_change
             end
         end
     end
 
     # 4
-    for n in neurons
-        decay_life!(n, NN.life_decay)
+    for n_i in n_ind
+        NN.components[n_i].lifeTime -= NN.life_decay
+        if NN.components[n_i].lifeTime <= 0.
+            NN.components[n_i].priors .= missing
+            NN.components[n_i].posteriors .= missing
+            NN.components[n_i] = missing
+        end
 
-        if !ismissing(n)
-            propergate!(n, den_sinks)
+        if !ismissing(NN.components[n_i])
+            propergate!(NN.components[n_i], den_sinks)
         end
     end
 
     if dens != []
         for d in skipmissing(dens)
-            append!(ap_sinks, [Sink(d.possition, NN.ap_sink_attractive_force)])
+            append!(ap_sinks, [Sink(d.cell.possition, NN.ap_sink_attractive_force)])
         end
     end
 
@@ -164,11 +146,13 @@ function state_step!(NN::Network, den_sinks, ap_sinks)
 
     in_nodes = get_input_nodes_in_all(network_all_cells)
     out_nodes = get_output_nodes_in_all(network_all_cells)
-    dens = get_dendrites_in_all(network_all_cells)
-    APs = get_axon_points_in_all(network_all_cells)
 
-    for den in dens
-        decay_life!(den.cell, NN.life_decay)
+    for den in get_dendrites_in_all(network_all_cells)
+        den.cell.lifeTime -= NN.life_decay
+        if den.cell.lifeTime <= 0.
+            den = missing
+        end
+
         if !ismissing(den.cell)
             total_v = [0.,0.,0.]
             for d_sink in den_sinks
@@ -188,8 +172,12 @@ function state_step!(NN::Network, den_sinks, ap_sinks)
         end
     end
 
-    for ap in APs
-        decay_life!(ap.cell, NN.life_decay)
+    for ap in get_axon_points_in_all(network_all_cells)
+        # if typeof(ap.cell) == AxonPoint
+        if ap.cell.lifeTime <= 0.
+            ap = missing
+        end
+
         if !ismissing(ap.cell)
             total_v = [0.,0.,0.]
             for ap_sink in ap_sinks
@@ -201,10 +189,15 @@ function state_step!(NN::Network, den_sinks, ap_sinks)
 
             ap.cell.possition += Possition(total_v...)
 
-            for d in dens
+            for d in get_dendrites_in_all(network_all_cells)
                 if distance(ap.cell.possition, d.cell.possition) <= NN.minFuseDistance
                     # random possition for dispersion
                     nt = unfold(rand(NN.dna_stack.nt_dna_samples))
+
+                    # basicly rectify_possition() only for dispersion_region
+                    if distance(nt.dispersion_region, Possition(0,0,0)) > NN.size
+                        nt.dispersion_region = normalize(nt.dispersion_region) * NN.size
+                    end
 
                     half_dist = direction(ap.cell.possition, d.cell.possition) ./ 2
                     pos = ap.cell.possition + Possition(half_dist...)
@@ -239,20 +232,6 @@ function state_step!(NN::Network, den_sinks, ap_sinks)
 end
 
 # STRUCTURE GENERATION FUNCTIONS
-function populate_network!(NN::Network, num_neurons, max_num_priors, max_num_post)
-    for n in 1:num_neurons
-        n = unfold(rand(NN.dna_stack.n_dna_samples), copy(NN.n_id_counter))
-        NN.n_id_counter += 1
-        append!(NN.components, [n])
-
-        for _ in 1:rand(1:max_num_priors)
-            add_dendrite!(n, rand(NN.dna_stack.den_dna_samples), NN.components)
-        end
-        for _ in 1:rand(1:max_num_post)
-            add_axon_point!(n, rand(NN.dna_stack.ap_dna_samples), NN.components)
-        end
-    end
-end
 function fuse!(den::AllCell, ap::AllCell, to::Synaps)
     if typeof(den.cell) != Dendrite || typeof(ap.cell) != AxonPoint; throw("incorect fuse!($(typeof(den.cell)), $(typeof(ap.cell)))"); end
     println(" -- warning -- fusion creates duplicate references in the component list of the network")
@@ -267,33 +246,59 @@ function fuse!(network_node::AllCell, den::AllCell)
     if typeof(ap.cell) != AxonPoint || typeof(network_node.cell) != InputNode || typeof(network_node.cell) != OutputNode; throw("incorect fuse!($(typeof(ap.cell)), $(typeof(network_node.cell)))"); end
     den.cell = network_node.cell
 end
+function add_neuron!(NN::Network, n_dna::NeuronDNA)
+    n = unfold(n_dna, copy(NN.n_id_counter))
+    NN.n_id_counter += 1
 
+    rectify_possition!(n, NN.size)
 
-# NETWORK ACCESS FUNCTIONS
-function add_dendrite!(N::Neuron, denDNA::DendriteDNA, NN_collection)
+    append!(NN.components, n)
+    return n
+end
+function add_dendrite!(NN::Network, N::Neuron)
     if has_empty_prior(N)
         for i in eachindex(N.priors)
             if ismissing(N.priors[i])
-                d = AllCell(unfold(denDNA))
+                d = AllCell(unfold(rand(NN.dna_stack.den_dna_samples)))
+                rectify_possition!(d, NN.size)
+
                 N.priors[i] = d
-                append!(NN_collection, [d])
+                append!(NN.components, [d])
                 return nothing
             end
         end
     end
 end
-function add_axon_point!(N::Neuron, apDNA::AxonPointDNA, NN_collection)
+function add_axon_point!(NN::Network, N::Neuron)
     if has_empty_post(N)
         for i in eachindex(N.posteriors)
             if ismissing(N.posteriors[i])
-                ap = AllCell(unfold(apDNA))
+                ap = AllCell(unfold(rand(NN.dna_stack.ap_dna_samples)))
+                rectify_possition!(ap, NN.size)
+
                 N.posteriors[i] = ap
-                append!(NN_collection, [ap])
+                append!(NN.components, [ap])
                 return nothing
             end
         end
     end
 end
+function populate_network!(NN::Network, num_neurons::Integer, max_num_priors::Integer, max_num_post::Integer)
+    for _ in 1:num_neurons
+        # add_neuron! adds it to component list
+        n = add_neuron!(NN, random(NN.dna_stack.n_dna_samples))
+
+        for _ in 1:rand(1:max_num_priors)
+            add_dendrite!(NN, n)
+        end
+        for _ in 1:rand(1:max_num_post)
+            add_axon_point!(NN, n)
+        end
+    end
+end
+
+
+# FITNESS FUNCTIONS
 function update_fitness!(s::Synaps, activated::Bool, fitness_decay::FloatN)
     s.fitness *= fitness_decay
     if activated
@@ -301,20 +306,85 @@ function update_fitness!(s::Synaps, activated::Bool, fitness_decay::FloatN)
         s.fitness += 1.
     end
 end
+# implement for neuron
+
+# implement for network
+
+# ...
+
 
 # VERIFICATION FUNCTIONS
-function rectifyDNA!(NDNA::NeuronDNA, maxLifeTime::Integer)
-    clamp!(NDNA.LifeTime.min, 1, maxLifeTime-1)
-    clamp!(NDNA.LifeTime.max, NDNA.LifeTime.min, maxLifeTime)
+function rectify_possition!(c, nn_size::FloatN)
+    if distance(c.possition, Possition(0,0,0)) > nn_size
+        c.possition = normalize(c.possition) * nn_size
+    end
 end
-function rectifyDNA!(DDNA::DendriteDNA, maxLifeTime::Integer); end
-function rectifyDNA!(APDNA::AxonPointDNA, maxLifeTime::Integer); end
-function rectifyDNA!(SDNA::SynapsDNA, maxLifeTime::Integer, qDecay_bounds::min_max_pair, threshold_bounds::min_max_pair)
-    clamp!(SDNA.QDecay, qDecay_bounds.min, qDecay_bounds.max)
-    clamp!(SDNA.THR, threshold_bounds.min, threshold_bounds.max)
-    clamp!(SDNA.LifeTime, 1, maxLifeTime)
+function clean_network_components!(NN)
+    NN.components = collect(skipmissing(NN.components))
+    all_c = NN.components
+
+    for n1 in eachindex(all_c)
+        if typeof(all_c[n1]) == AllCell
+            if typeof(all_c[n1].cell) == Synaps
+                for n2 in eachindex(all_c)
+                    if typeof(all_c[n2]) == AllCell
+                        if typeof(all_c[n2].cell) == Synaps
+                            if n1 != n2
+                                if all_c[n1].cell === all_c[n2].cell
+                                    all_c[n2] = missing
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+function rectifyDNA!(dna::DendriteDNA, NN::Network)
+    clamp!(dna.LifeTime.min, 1., NN.maxDendriteLifeTime-1.)
+    clamp!(dna.LifeTime.max, dna.LifeTime.min, NN.maxDendriteLifeTime)
+
+    clamp!(dna.max_length.min, 1., (NN.size/2)-1)
+    clamp!(dna.max_length.max, dna_max_length.min+0.01, NN.size/2) # 0.01 for max > min
+
+    # init possition does not have to be rectified
+    # because its clamped at initialization time
+end
+function rectifyDNA!(dna::AxonPointDNA, NN::Network);
+    clamp!(dna.LifeTime.min, 1., NN.maxDendriteLifeTime-1.)
+    clamp!(dna.LifeTime.max, dna.LifeTime.min, NN.maxDendriteLifeTime)
+
+    clamp!(dna.max_length.min, 1., (NN.size/2)-1)
+    clamp!(dna.max_length.max, dna_max_length.min+0.01, NN.size/2) # 0.01 for max > min
+
+    # init possition does not have to be rectified
+    # because its clamped at initialization time
+end
+function rectifyDNA!(dna::NeuroTransmitterDNA, NN::Network)
+    dna.init_strength.min = max(dna.init_strength.min, 1.)
+    dna.init_strength.max = max(dna.init_strength.max, dna.init_strength.min+0.01)
+
+    clamp!(dna.dispersion_strength_scale.min, 0.1, NN.max_nt_dispersion_strength_scale-0.1)
+    clamp!(dna.dispersion_strength_scale.max, dna.dispersion_strength_scale.min+0.01, NN.max_nt_dispersion_strength_scale)
+
+    clamp!(dna.retain_percentage, 0, 1)
+
+    # dispersion region does not have to be rectified
+    # because its clamped at initialization time
+end
+function rectifyDNA!(dna::SynapsDNA, maxLifeTime::Integer, qDecay_bounds::min_max_pair, threshold_bounds::min_max_pair)
+    clamp!(dna.QDecay, qDecay_bounds.min, qDecay_bounds.max)
+    clamp!(dna.THR, threshold_bounds.min, threshold_bounds.max)
+    clamp!(dna.LifeTime, 1., maxLifeTime)
+end
+function rectifyDNA!(dna::NeuronDNA, maxLifeTime::Integer)
+    clamp!(dna.LifeTime.min, 1., maxLifeTime-1.)
+    clamp!(dna.LifeTime.max, dna.LifeTime.min, maxLifeTime)
 end
 function rectifyDNA!(NDNA::NetworkDNA)
+
 end
 function rectifyInitializationPossition!(pos::InitializationPossition, network_max_range::FloatN)
+
 end

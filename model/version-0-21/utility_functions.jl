@@ -22,10 +22,7 @@ get_activatable_synapses(x::Array{Synaps}) = [s for s in x if s.Q >= s.THR]
 
 get_all_all_cells(NN::Network) = [n for n in NN.components if typeof(n) == AllCell]
 get_all_neurons(NN::Network) = [n for n in NN.components if typeof(n) == Neuron]
-get_all_input_nodes(NN::Network) = [n for n in NN.components if typeof(n) == InputNode]
-get_all_output_nodes(NN::Network) = [n for n in NN.components if typeof(n) == OutputNode]
-
-
+get_all_neuron_indecies(NN::Network) = [i for i in 1:length(NN.components)][typeof.(NN.components) .== Neuron]
 
 get_prior_all_cells(N::Neuron) = [n for n in skipmissing(N.priors) if typeof(n) == AllCell]
 get_posterior_all_cells(N::Neuron) = [n for n in skipmissing(N.posteriors) if typeof(n) == AllCell]
@@ -34,6 +31,17 @@ get_neurons(subnet::Subnet, neuron_collection::Array{Neuron}) = [n for n in skip
 get_dendrites(subnet::Subnet, den_collection::Array{Dendrite}) = [d for d in skipmissing(den_collection) if distance(d.possition, subnet.possition) < subnet.range]
 get_axon_points(subnet::Subnet, ap_collection::Array{AxonPoint}) = [ap for ap in skipmissing(ap_collection) if distance(ap.possition, subnet.possition) <= subnet.range]
 get_synapses(subnet::Subnet, syn_collection::Array{Synaps}) = [syn for syn in skipmissing(syn_collection) if distance(syn.possition, subnet.possition) <= subnet.range]
+
+get_all_possitions(NN::Network) = begin
+    a = []
+    for c in skipmissing(NN.components)
+        if typeof(c) == Neuron
+            append!(a, c.possition)
+        else
+            append!(a, c.cell.possition)
+        end
+    end
+end
 
 
 # SPATIAL FUNCTIONS
@@ -49,22 +57,19 @@ normalize(v::Vector) = v ./ vector_length(v)
 
 
 # INITIALIZATION SAMPELING
-function get_random_init_possition(center::Possition, range::FloatN)
-    return InitializationPossition(m_v_pair(center.x, range), m_v_pair(center.y, range), m_v_pair(center.z, range))
+function get_random_init_possition(center::Possition, range::Number)
+    return InitializationPossition(min_max_pair(center.x, range), min_max_pair(center.y, range), min_max_pair(center.z, range))
 end
-function get_random_init_sub_possition(center::Possition, range::FloatN, sub_sample_range::FloatN)
+function get_random_init_sub_possition(center::Possition, range::Number, sub_sample_range::Number)
     sub_pos = sample(get_random_init_possition(center, range))
     return get_random_init_possition(sub_pos, sub_sample_range)
 end
 
 function sample(init_pos::InitializationPossition)
-    Possition(rand(Normal(init_pos.x.mean, to_stdv(init_pos.x.variance))), rand(Normal(init_pos.y.mean, to_stdv(init_pos.y.variance))), rand(Normal(init_pos.z.mean, to_stdv(init_pos.z.variance))))
+    Possition(rand(Uniform(init_pos.x.min, init_pos.x.max)), rand(Uniform(init_pos.y.min, init_pos.y.max)), rand(Uniform(init_pos.z.min, init_pos.z.max)))
 end
 function sample(min_max::min_max_pair)
-    rand(min_max.min:min_max.max)
-end
-function sample(m_v::m_v_pair)
-    rand(Normal(m_v.mean, to_stdv(m_v.variance)))
+    rand(Uniform(min_max.min, min_max.max))
 end
 
 
@@ -86,6 +91,8 @@ function unfold(dna::NeuronDNA, n_id::Integer)::Neuron
     lifetime = sample(dna.lifeTime)
     num_priors = sample(dna.max_num_priors)
     num_posteriors = sample(dna.max_num_posteriors)
+
+    println(pos, lifetime, num_priors, num_posteriors)
     return Neuron(n_id, pos, 0., lifetime, [missing for _ in 1:num_priors], [missing for _ in 1:num_posteriors], 0., 0.)
 end
 function unfold(dna::NeuroTransmitterDNA, init_region_center::Possition)
@@ -96,7 +103,12 @@ function unfold(dna::NeuroTransmitterDNA)
     pos = sample(dna.dispersion_region)
     return NeuroTransmitter(sample(dna.init_strength), pos, sample(dna.dispersion_strength_scale), sample(dna.retain_percentage))
 end
-function unfold(dna::NetworkDNA, min_fuse_distance::FloatN, init_life_decay::Integer, dna_stack, components)
+function unfold(dna::NetworkDNA,
+                min_fuse_distance::FloatN,
+                init_life_decay::FloatN,
+                max_nt_dispersion_strength_scale::FloatN,
+                dna_stack,
+                components)
     size = sample(dna.networkSize)
     mNlife = sample(dna.maxNeuronLifeTime)
     mSlife = sample(dna.maxSynapsLifeTime)
@@ -105,7 +117,7 @@ function unfold(dna::NetworkDNA, min_fuse_distance::FloatN, init_life_decay::Int
     sink_force = sample(dna.ap_sink_force)
     nrf = sample(dna.neuron_repel_force)
 
-    return Network(size, mNlife, mSlife, mDlife, mAlife, min_fuse_distance, sink_force, nrf, dna_stack, components, init_life_decay, 0, 0)
+    return Network(size, mNlife, mSlife, mDlife, mAlife, min_fuse_distance, sink_force, nrf, max_nt_dispersion_strength_scale,dna_stack, components, init_life_decay, 0, 0)
 end
 
 
