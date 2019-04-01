@@ -373,14 +373,30 @@ function rectifyDNA!(dna::NeuroTransmitterDNA, NN::Network)
     # dispersion region does not have to be rectified
     # because its clamped at initialization time
 end
-function rectifyDNA!(dna::SynapsDNA, maxLifeTime::Integer, qDecay_bounds::min_max_pair, threshold_bounds::min_max_pair)
-    clamp!(dna.QDecay, qDecay_bounds.min, qDecay_bounds.max)
-    clamp!(dna.THR, threshold_bounds.min, threshold_bounds.max)
-    clamp!(dna.LifeTime, 1., maxLifeTime)
+function rectifyDNA!(dna::SynapsDNA, NN::Network; max_q_decay=0.1)
+    clamp!(dna.LifeTime.min, 1., NN.maxSynapsLifeTime-1.)
+    clamp!(dna.LifeTime.max, dna.LifeTime.min+0.01, NN.maxSynapsLifeTime)
+
+    clamp!(dna.QDecay.min, max_q_decay, 0.97)
+    clamp!(dna.QDecay.max, dna.QDecay.min+0.01, 0.99)
+
+    clamp!(dna.THR.min, 0.1, NN.max_threshold-0.1)
+    clamp!(dna.THR.max, dna.THR.min+0.01, NN.max_threshold)
+
+    rectifyDNA!(dna.NT)
 end
-function rectifyDNA!(dna::NeuronDNA, maxLifeTime::Integer)
-    clamp!(dna.LifeTime.min, 1., maxLifeTime-1.)
-    clamp!(dna.LifeTime.max, dna.LifeTime.min, maxLifeTime)
+function rectifyDNA!(dna::NeuronDNA, NN::Network)
+    clamp!(dna.lifeTime.min, 1., NN.maxNeuronLifeTime-1.)
+    clamp!(dna.lifeTime.max, dna.LifeTime.min+0.1, NN.maxNeuronLifeTime)
+
+    dna.max_num_priors.min = max(dna.max_num_priors.min, 1)
+    dna.max_num_priors.max = max(dna.max_num_priors.max, dna.max_num_priors.min+1)
+    
+    dna.max_num_posteriors.min = max(dna.max_num_posteriors.min, 1)
+    dna.max_num_posteriors.max = max(dna.max_num_posteriors.max, dna.max_num_posteriors.min+1)
+
+    # init possition does not have to be rectified
+    # because its clamped at initialization time
 end
 function rectifyDNA!(NDNA::NetworkDNA)
 

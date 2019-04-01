@@ -156,6 +156,7 @@ mutable struct Network
     ap_sink_attractive_force::FloatN # force: AxonPoint's -> ap_sinks
     neuron_repel_force::FloatN
     max_nt_dispersion_strength_scale::FloatN
+    max_threshold::FloatN
     dna_stack::DNAStack
 
     # change at t
