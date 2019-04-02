@@ -54,10 +54,6 @@ mutable struct NeuronDNA
     max_num_priors::min_max_pair
     max_num_posteriors::min_max_pair
     lifeTime::min_max_pair
-
-    # # deltas
-    # force::Force
-    # lifeDecay::Integer
 end
 mutable struct DNAStack
     nt_dna_samples::Array{NeuroTransmitterDNA}
@@ -110,7 +106,6 @@ mutable struct AxonPoint
 
     # change at t
     possition::Possition
-
 end
 mutable struct Synaps
     # constants
@@ -123,6 +118,7 @@ mutable struct Synaps
     Q::FloatN
     possition::Possition
     NT::NeuroTransmitter # NTs::Array{NeuroTransmitter}
+    total_fitness::FloatN
 end
 mutable struct AllCell
     cell::Union{AxonPoint, Dendrite, Synaps, InputNode, OutputNode}
@@ -162,6 +158,8 @@ mutable struct Network
     # change at t
     components::Array{Union{Missing, AllCell, Neuron}, 1}
     life_decay::Integer
+    fitness::FloatN
+    fitness_decay::FloatN
     n_id_counter::Integer
     s_id_counter::Integer
 end

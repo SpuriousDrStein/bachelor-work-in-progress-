@@ -57,12 +57,8 @@ normalize(v::Vector) = v ./ vector_length(v)
 
 
 # INITIALIZATION SAMPELING
-function get_random_init_possition(center::Possition, range::Number)
-    return InitializationPossition(min_max_pair(center.x, range), min_max_pair(center.y, range), min_max_pair(center.z, range))
-end
-function get_random_init_sub_possition(center::Possition, range::Number, sub_sample_range::Number)
-    sub_pos = sample(get_random_init_possition(center, range))
-    return get_random_init_possition(sub_pos, sub_sample_range)
+function get_random_init_possition(range::Number)
+    return InitializationPossition(min_max_pair(-range, range), min_max_pair(-range, range), min_max_pair(-range, range))
 end
 
 function sample(init_pos::InitializationPossition)
@@ -71,7 +67,6 @@ end
 function sample(min_max::min_max_pair)
     rand(Uniform(min_max.min, min_max.max))
 end
-
 
 # DNA GENERATOR FUNCTIONS
 function unfold(dna::DendriteDNA)
@@ -84,7 +79,7 @@ function unfold(dna::SynapsDNA, s_id::Integer, possition::Possition, NT::NeuroTr
     q_dec = sample(dna.QDecay)
     thr = sample(dna.THR)
     lifetime = sample(dna.lifeTime)
-    return Synaps(s_id, thr, q_dec, lifetime, 0, possition, NT)
+    return Synaps(s_id, thr, q_dec, lifetime, 0, possition, NT, 0.)
 end
 function unfold(dna::NeuronDNA, n_id::Integer)::Neuron
     pos = sample(dna.init_pos)
@@ -92,7 +87,7 @@ function unfold(dna::NeuronDNA, n_id::Integer)::Neuron
     num_priors = sample(dna.max_num_priors)
     num_posteriors = sample(dna.max_num_posteriors)
 
-    println(pos, lifetime, num_priors, num_posteriors)
+    # println(pos, lifetime, num_priors, num_posteriors)
     return Neuron(n_id, pos, 0., lifetime, [missing for _ in 1:num_priors], [missing for _ in 1:num_posteriors], 0., 0.)
 end
 function unfold(dna::NeuroTransmitterDNA, init_region_center::Possition)
@@ -107,8 +102,10 @@ function unfold(dna::NetworkDNA,
                 min_fuse_distance::FloatN,
                 init_life_decay::FloatN,
                 max_nt_dispersion_strength_scale::FloatN,
-                dna_stack,
-                components)
+                max_threshold::FloatN,
+                dna_stack;
+                fitness_decay=0.99,
+                init_fitness=0)
     size = sample(dna.networkSize)
     mNlife = sample(dna.maxNeuronLifeTime)
     mSlife = sample(dna.maxSynapsLifeTime)
@@ -117,7 +114,7 @@ function unfold(dna::NetworkDNA,
     sink_force = sample(dna.ap_sink_force)
     nrf = sample(dna.neuron_repel_force)
 
-    return Network(size, mNlife, mSlife, mDlife, mAlife, min_fuse_distance, sink_force, nrf, max_nt_dispersion_strength_scale,dna_stack, components, init_life_decay, 0, 0)
+    return Network(size, mNlife, mSlife, mDlife, mAlife, min_fuse_distance, sink_force, nrf, max_nt_dispersion_strength_scale, max_threshold, dna_stack, [], init_life_decay, init_fitness, fitness_decay, 0, 0)
 end
 
 
