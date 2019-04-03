@@ -2,6 +2,7 @@ using Distributions
 
 include("utility_functions.jl")
 include("network_operation_functions.jl")
+include("evolutionary_network_generation.jl")
 
 
 # BASE OVERLOAD

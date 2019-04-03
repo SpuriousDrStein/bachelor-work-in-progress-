@@ -154,12 +154,13 @@ mutable struct Network
     max_nt_dispersion_strength_scale::FloatN
     max_threshold::FloatN
     dna_stack::DNAStack
+    fitness_decay::FloatN
 
     # change at t
     components::Array{Union{Missing, AllCell, Neuron}, 1}
+    IO_components::Array{Union{AllCell}, 1}
     life_decay::Integer
-    fitness::FloatN
-    fitness_decay::FloatN
+    total_fitness::FloatN
     n_id_counter::Integer
     s_id_counter::Integer
 end

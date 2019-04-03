@@ -9,18 +9,18 @@ has_empty_post(N::Neuron) = any([ismissing(p) for p in N.posteriors])
 get_dendrites(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == Dendrite]
 get_axon_points(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == AxonPoint]
 get_synapses(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == Synaps]
-get_input_nodes(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == InputNode]
-get_output_nodes(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == OutputNode]
+get_input_nodes(NN::Network) = [n.cell for n in NN.IO_components if typeof(n.cell) == InputNode]
+get_output_nodes(NN::Network) = [n.cell for n in NN.IO_components if typeof(n.cell) == OutputNode]
 
 get_dendrites_in_all(x::Array{AllCell}) = [n for n in x if typeof(n.cell) == Dendrite]
 get_axon_points_in_all(x::Array{AllCell}) = [n for n in x if typeof(n.cell) == AxonPoint]
 get_synapses_in_all(x::Array{AllCell}) = [n for n in x if typeof(n.cell) == Synaps]
-get_input_nodes_in_all(x::Array{AllCell}) = [n for n in x if typeof(n.cell) == InputNode]
-get_output_nodes_in_all(x::Array{AllCell}) = [n for n in x if typeof(n.cell) == OutputNode]
+get_input_nodes_in_all(NN::Network) = [n for n in NN.IO_components if typeof(n.cell) == InputNode]
+get_output_nodes_in_all(NN::Network) = [n for n in NN.IO_components if typeof(n.cell) == OutputNode]
 
 get_activatable_synapses(x::Array{Synaps}) = [s for s in x if s.Q >= s.THR]
 
-get_all_all_cells(NN::Network) = [n for n in NN.components if typeof(n) == AllCell]
+get_all_all_cells(NN::Network) = [n for n in NN.components if typeof(n) == AllCell] #..., NN.IO_components...]
 get_all_neurons(NN::Network) = [n for n in NN.components if typeof(n) == Neuron]
 get_all_neuron_indecies(NN::Network) = [i for i in 1:length(NN.components)][typeof.(NN.components) .== Neuron]
 
@@ -114,7 +114,7 @@ function unfold(dna::NetworkDNA,
     sink_force = sample(dna.ap_sink_force)
     nrf = sample(dna.neuron_repel_force)
 
-    return Network(size, mNlife, mSlife, mDlife, mAlife, min_fuse_distance, sink_force, nrf, max_nt_dispersion_strength_scale, max_threshold, dna_stack, [], init_life_decay, init_fitness, fitness_decay, 0, 0)
+    return Network(size, mNlife, mSlife, mDlife, mAlife, min_fuse_distance, sink_force, nrf, max_nt_dispersion_strength_scale, max_threshold, dna_stack, init_life_decay, [], [], init_fitness, fitness_decay, 0, 0)
 end
 
 

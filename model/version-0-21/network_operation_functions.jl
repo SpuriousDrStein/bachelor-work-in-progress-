@@ -60,9 +60,9 @@ end
 function value_step!(NN::Network, input::Array)
     network_all_cells = get_all_all_cells(NN)
     n_ind = get_all_neuron_indecies(NN)
+    in_nodes = get_input_nodes_in_all(NN)
+    out_nodes = get_output_nodes_in_all(NN)
 
-    in_nodes = get_input_nodes_in_all(network_all_cells)
-    out_nodes = get_output_nodes_in_all(network_all_cells)
     dens = get_dendrites_in_all(network_all_cells)
     # APs = get_axon_points_in_all(network_all_cells)
 
@@ -128,8 +128,8 @@ function state_step!(NN::Network, den_sinks, ap_sinks)
     # update spatial relation
     network_all_cells = get_all_all_cells(NN)
     neurons = get_all_neurons(NN)
-    in_nodes = get_input_nodes_in_all(network_all_cells)
-    out_nodes = get_output_nodes_in_all(network_all_cells)
+    in_nodes = get_input_nodes_in_all(NN)
+    out_nodes = get_output_nodes_in_all(NN)
 
 
     for den in get_dendrites_in_all(network_all_cells)
@@ -283,7 +283,7 @@ end
 # VERIFICATION FUNCTIONS
 function rectify_possition!(c, nn_size::FloatN)
     if distance(c.possition, Possition(0,0,0)) > nn_size
-        c.possition = normalize(c.possition) * nn_size
+        c.possition = Possition((normalize(c.possition) * nn_size)...)
     end
 end
 function clean_network_components!(NN)
@@ -293,6 +293,9 @@ function clean_network_components!(NN)
     for n1 in eachindex(NN.components)
         if typeof(NN.components[n1]) == AllCell && typeof(NN.components[n1].cell) != InputNode && typeof(NN.components[n1].cell) != OutputNode
             if NN.components[n1].cell.lifeTime <= 0
+                if typeof(NN.components[n1]) == Synaps
+                    NN.total_fitness += NN.components[n1].cell.total_fitness
+                end
                 NN.components[n1] = missing
             end
 
@@ -313,8 +316,11 @@ function clean_network_components!(NN)
             end
         elseif typeof(NN.components[n1]) == Neuron
             if NN.components[n1].lifeTime <= 0
+                NN.total_fitness += NN.components[n1].total_fitness
                 NN.components[n1] = missing
             end
+        elseif typeof(NN.components[n1]) == InputNode || typeof(NN.components[n1]) == OutputNode
+            println("input or output registered in components")
         end
     end
     NN.components = collect(skipmissing(NN.components))
