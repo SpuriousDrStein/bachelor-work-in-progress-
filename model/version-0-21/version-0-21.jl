@@ -63,8 +63,10 @@ for i in 1:1000
     # println("num_synapses   = ", length(get_synapses(get_all_all_cells(NN))))
     # println("num_neurons   = ", length(get_all_neurons(NN)))
 
-    println(["$(s.Q) :: " for s in get_synapses(get_all_all_cells(NN))])
     test(NN)
+    # println(["$(s.Q) :: " for s in get_synapses(get_all_all_cells(NN))])
+    # println([distance(get_input_nodes(NN)[1].possition, d.possition) for d in get_dendrites(get_all_all_cells(NN))])
+    # println("----------")
 
     # println(NN.components[1])
     clean_network_components!(NN)

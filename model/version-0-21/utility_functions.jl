@@ -11,6 +11,9 @@ get_axon_points(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == Axo
 get_synapses(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == Synaps]
 get_input_nodes(NN::Network) = [n.cell for n in NN.IO_components if typeof(n.cell) == InputNode]
 get_output_nodes(NN::Network) = [n.cell for n in NN.IO_components if typeof(n.cell) == OutputNode]
+get_input_nodes(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == InputNode]
+get_output_nodes(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == OutputNode]
+
 
 get_dendrites_in_all(x::Array{AllCell}) = [n for n in x if typeof(n.cell) == Dendrite]
 get_axon_points_in_all(x::Array{AllCell}) = [n for n in x if typeof(n.cell) == AxonPoint]
@@ -42,6 +45,7 @@ get_all_possitions(NN::Network) = begin
         end
     end
 end
+
 
 
 # SPATIAL FUNCTIONS
@@ -103,6 +107,7 @@ function unfold(dna::NetworkDNA,
                 init_life_decay::FloatN,
                 max_nt_dispersion_strength_scale::FloatN,
                 max_threshold::FloatN,
+                random_fluctuation_scale::FloatN,
                 dna_stack;
                 fitness_decay=0.99,
                 init_fitness=0)
@@ -114,7 +119,7 @@ function unfold(dna::NetworkDNA,
     sink_force = sample(dna.ap_sink_force)
     nrf = sample(dna.neuron_repel_force)
 
-    return Network(size, mNlife, mSlife, mDlife, mAlife, min_fuse_distance, sink_force, nrf, max_nt_dispersion_strength_scale, max_threshold, dna_stack, init_life_decay, [], [], init_fitness, fitness_decay, 0, 0)
+    return Network(size, mNlife, mSlife, mDlife, mAlife, min_fuse_distance, sink_force, nrf, max_nt_dispersion_strength_scale, max_threshold, dna_stack, fitness_decay, random_fluctuation_scale, [], [], init_life_decay, init_fitness, 0, 0)
 end
 
 

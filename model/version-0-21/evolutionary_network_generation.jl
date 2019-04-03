@@ -12,25 +12,26 @@ MAX_NT_DISPERSION_STRENGTH_SCALE    = FloatN(2.0)
 MAX_THRESHOLD                       = FloatN(10)
 LIFE_DECAY                          = FloatN(0.1)
 FITNESS_DECAY                       = FloatN(0.99)
+RANDOM_FLUCTUATION                  = FloatN(0.05)
 INIT_NUM_NEURONS                    = 20
 DNA_SAMPLE_SIZE                     = 4
-INIT_MAX_POSTERIORS                 = 5 # how many ap's can be created at instantiation time
 INIT_MAX_PRIORS                     = 5
+INIT_MAX_POSTERIORS                 = 5 # how many ap's can be created at instantiation time
 
 
-function initialize(net_dna)
+function initialize(net_dna, dna_stack)
     rectifyDNA!(net_dna)
     nn = unfold(net_dna,
-                min_fuse_distance,
-                init_life_decay,
-                max_nt_dispersion_strength_scale,
-                max_threshold,
+                MIN_FUSE_DISTANCE,
+                LIFE_DECAY,
+                MAX_NT_DISPERSION_STRENGTH_SCALE,
+                MAX_THRESHOLD,
+                RANDOM_FLUCTUATION,
                 dna_stack,
                 fitness_decay=fitness_decay)
 
     rectifyDNA!(nn.dna_stack, nn)
-    populate_network!(nn, init_num_neurons, init_max_priors, init_max_posteriors)
-
+    populate_network!(nn, INIT_NUM_NEURONS, INIT_MAX_PRIORS, INIT_MAX_POSTERIORS)
     return nn
 end
 
@@ -41,6 +42,8 @@ end
 
 # THE REAL NETWORK
 output_size = [DNA_SAMPLE_SIZE, 18] # 18 parameter
+
+
 
 
 
