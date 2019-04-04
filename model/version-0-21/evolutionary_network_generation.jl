@@ -36,9 +36,11 @@ n_sample_output_size = DNA_SAMPLE_SIZE * 5 * 2 + (2 * 3) # the same as nt
 net_sample_output_size = 3 # net_size, ap_sink_force and neuron_repel_force
 
 # input_size = 100
-input_size = sum([ap_sample_output_size..., den_sample_output_size..., nt_sample_output_size..., syn_sample_output_size..., n_sample_output_size...])
+input_size = ap_sample_output_size + den_sample_output_size + nt_sample_output_size + syn_sample_output_size + n_sample_output_size
 latent_size = 40
 latent_activation = Flux.sigmoid
+MIN_RECONSTRUCTION_LOSS = 10 # if above this threshold - do more reconstruction effort
+
 
 DECODER_HIDDENS = [50, 30, 20]
 ENCODER_HIDDENS = [90, 60, 40, 30]
@@ -96,38 +98,31 @@ net_model = Flux.Chain(
             Flux.Dense(DECODER_HIDDENS[end], net_sample_output_size, Flux.relu))
 
 
-z1 = encoder_model(rand(input_size))
+x = rand(input_size)
+z1 = encoder_model(x)
 
-net_dna = net_model(z1)
 nt_dna = nt_model(z1)
 ap_dna = ap_model(z1)
 den_dna = den_model(z1)
 syn_dna = syn_model(z1)
 n_dna = neuron_model(z1)
+net_dna = net_model(z1)
+
+rec_x = [nt_dna..., ap_dna..., den_dna..., syn_dna..., n_dna..., net_dna...]
 
 
+if Flux.mse(x, rec_x) >= MIN_RECONSTRUCTION_LOSS
+    reconstruction_loss = Flux.mse(x, rec_x)
 
-function collect_dna(NN::Network)
-    collection = []
-    den_samples = NN.dna_stack.den_dna_samples
-    syn_samples = NN.dna_stack.syn_dna_samples
-    n_samples = NN.dna_stack.n_dna_samples
-
-    for nts in NN.dna_stack.nt_dna_samples
-        append!(collection, nts.init_strength.min)
-        append!(collection, nts.init_strength.max)
-        append!(collection, nts.dispersion_region.x.min)
-        append!(collection, nts.dispersion_region.x.max)
-        append!(collection, nts.dispersion_region.y.min)
-        append!(collection, nts.dispersion_region.y.max)
-        append!(collection, nts.dispersion_region.z.min)
-        append!(collection, nts.dispersion_region.z.max)
-        append!(collection, nts.dispersion_strength_scale.min)
-        append!(collection, nts.dispersion_strength_scale.max)
-    end
-    for aps in NN.dna_stack.ap_dna_samples
-        append!(collection, aps.max_length.min)
+    # train encoder and decoder on reconstruction loss
 end
+
+
+# run training for N number of networks
+# select top percentile based on NN.total_fitness
+
+# train decoder on these top percentiles
+
 
 
 # reihenfolge
@@ -155,3 +150,70 @@ end
 #       dna_and_ap_init_range
 #       den_init_interval
 #       ap_init_interval
+#   nn_dna
+#       networkSize
+#       ap_sink_force
+#       neuron_repel_force
+
+
+function collect_dna(NN::Network, nn_dna::NetworkDNA)
+    collection = []
+    n_samples = NN.dna_stack.n_dna_samples
+
+    for nts in NN.dna_stack.nt_dna_samples
+        append!(collection, nts.init_strength.min)
+        append!(collection, nts.init_strength.max)
+        append!(collection, nts.dispersion_region.x.min)
+        append!(collection, nts.dispersion_region.x.max)
+        append!(collection, nts.dispersion_region.y.min)
+        append!(collection, nts.dispersion_region.y.max)
+        append!(collection, nts.dispersion_region.z.min)
+        append!(collection, nts.dispersion_region.z.max)
+        append!(collection, nts.dispersion_strength_scale.min)
+        append!(collection, nts.dispersion_strength_scale.max)
+        append!(collection, nts.retain_percentage.min)
+        append!(collection, nts.retain_percentage.max)
+    end
+    for aps in NN.dna_stack.ap_dna_samples
+        append!(collection, aps.max_length.min)
+        append!(collection, aps.max_length.max)
+        append!(collection, aps.lifeTime.min)
+        append!(collection, aps.lifeTime.max)
+    end
+    for dens in NN.dna_stack.den_dna_samples
+        append!(collection, dens.max_length.min)
+        append!(collection, dens.max_length.max)
+        append!(collection, dens.lifeTime.min)
+        append!(collection, dens.lifeTime.max)
+    end
+    for syns in NN.dna_stack.syn_dna_samples
+        append!(collection, syns.THR.min)
+        append!(collection, syns.THR.max)
+        append!(collection, syns.QDecay.min)
+        append!(collection, syns.QDecay.max)
+        append!(collection, syns.lifeTime.min)
+        append!(collection, syns.lifeTime.max)
+    end
+    for ns in NN.dna_stack.n_dna_samples
+        append!(collection, ns.max_num_priors.min)
+        append!(collection, ns.max_num_priors.max)
+        append!(collection, ns.max_num_posteriors.min)
+        append!(collection, ns.max_num_posteriors.max)
+        append!(collection, ns.lifeTime.min)
+        append!(collection, ns.lifeTime.max)
+        append!(collection, ns.dna_and_ap_init_range.min)
+        append!(collection, ns.dna_and_ap_init_range.max)
+        append!(collection, ns.den_init_interval.min)
+        append!(collection, ns.den_init_interval.max)
+        append!(collection, ns.ap_init_interval.min)
+        append!(collection, ns.ap_init_interval.max)
+    end
+
+    append!(collection, nn_dna.networkSize.min)
+    append!(collection, nn_dna.networkSize.max)
+    append!(collection, nn_dna.ap_sink_force.min)
+    append!(collection, nn_dna.ap_sink_force.max)
+    append!(collection, nn_dna.neuron_repel_force.min)
+    append!(collection, nn_dna.neuron_repel_force.max)
+    return collection
+end

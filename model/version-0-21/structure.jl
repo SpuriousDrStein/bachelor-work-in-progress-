@@ -35,7 +35,6 @@ mutable struct AxonPointDNA
     lifeTime::min_max_pair
 end
 mutable struct NeuroTransmitterDNA
-    # fingerprint::String
     init_strength::min_max_pair # mean should be 1 for most "accurate" effect
     dispersion_region::InitializationPossition
     dispersion_strength_scale::min_max_pair
@@ -66,8 +65,6 @@ mutable struct NetworkDNA
 
     ap_sink_force::min_max_pair
     neuron_repel_force::min_max_pair
-
-    # NeuronAccessDropout::FloatN # dropout probability for unspecific neuron selections (1 for early tests)
 end
 
 
@@ -146,7 +143,6 @@ mutable struct Network
     maxSynapsLifeTime::FloatN
     maxDendriteLifeTime::FloatN
     maxAxonPointLifeTime::FloatN
-    # synapsesAccessDropout::FloatN
     minFuseDistance::FloatN
     ap_sink_attractive_force::FloatN # force: AxonPoint's -> ap_sinks
     neuron_repel_force::FloatN
