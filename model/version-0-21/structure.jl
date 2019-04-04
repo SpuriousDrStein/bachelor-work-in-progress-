@@ -29,12 +29,10 @@ end
 mutable struct DendriteDNA
     max_length::min_max_pair
     lifeTime::min_max_pair
-    init_pos::InitializationPossition
 end
 mutable struct AxonPointDNA
     max_length::min_max_pair
     lifeTime::min_max_pair
-    init_pos::InitializationPossition
 end
 mutable struct NeuroTransmitterDNA
     # fingerprint::String
@@ -47,13 +45,14 @@ mutable struct SynapsDNA
     THR::min_max_pair
     QDecay::min_max_pair
     lifeTime::min_max_pair
-    NT::NeuroTransmitterDNA
 end
 mutable struct NeuronDNA
-    init_pos::InitializationPossition
     max_num_priors::min_max_pair
     max_num_posteriors::min_max_pair
     lifeTime::min_max_pair
+    den_and_ap_init_range::FloatN
+    den_init_interval::min_max_pair
+    ap_init_interval::min_max_pair
 end
 mutable struct DNAStack
     nt_dna_samples::Array{NeuroTransmitterDNA}
@@ -65,12 +64,9 @@ end
 mutable struct NetworkDNA
     networkSize::min_max_pair
 
-    maxNeuronLifeTime::min_max_pair
-    maxSynapsLifeTime::min_max_pair
-    maxDendriteLifeTime::min_max_pair
-    maxAxonPointLifeTime::min_max_pair
     ap_sink_force::min_max_pair
     neuron_repel_force::min_max_pair
+
     # NeuronAccessDropout::FloatN # dropout probability for unspecific neuron selections (1 for early tests)
 end
 
@@ -126,6 +122,9 @@ end
 mutable struct Neuron
     # constants
     id::Integer
+    den_init_interval::Integer
+    ap_init_interval::Integer
+    den_and_ap_init_range::FloatN
 
     # change at t
     possition::Possition
@@ -153,9 +152,10 @@ mutable struct Network
     neuron_repel_force::FloatN
     max_nt_dispersion_strength_scale::FloatN
     max_threshold::FloatN
-    dna_stack::DNAStack
     fitness_decay::FloatN
     random_fluctuation_scale::FloatN
+    neuron_init_interval::Integer
+    dna_stack::DNAStack
 
     # change at t
     components::Array{Union{Missing, AllCell, Neuron}, 1}

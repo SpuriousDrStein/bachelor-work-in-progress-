@@ -230,8 +230,8 @@ function fuse!(network_node::AllCell, ac::AllCell)
         end
     end
 end
-function add_neuron!(NN::Network, n_dna::NeuronDNA)
-    n = unfold(n_dna, copy(NN.n_id_counter))
+function add_neuron!(NN::Network)
+    n = unfold(rand(NN.dna_stack.n_dna_samples), get_random_init_possition(NN.size) , copy(NN.n_id_counter))
     NN.n_id_counter += 1
 
     rectify_possition!(n, NN.size)
@@ -242,7 +242,7 @@ function add_dendrite!(NN::Network, N::Neuron)
     if has_empty_prior(N)
         for i in eachindex(N.priors)
             if ismissing(N.priors[i])
-                d = AllCell(unfold(rand(NN.dna_stack.den_dna_samples)))
+                d = AllCell(unfold(rand(NN.dna_stack.den_dna_samples), N.possition + get_random_init_possition(N.den_and_ap_init_range)))
                 rectify_possition!(d.cell, NN.size)
 
                 N.priors[i] = d
@@ -256,7 +256,7 @@ function add_axon_point!(NN::Network, N::Neuron)
     if has_empty_post(N)
         for i in eachindex(N.posteriors)
             if ismissing(N.posteriors[i])
-                ap = AllCell(unfold(rand(NN.dna_stack.ap_dna_samples)))
+                ap = AllCell(unfold(rand(NN.dna_stack.ap_dna_samples), N.possition + get_random_init_possition(N.den_and_ap_init_range)))
                 rectify_possition!(ap.cell, NN.size)
 
                 N.posteriors[i] = ap
@@ -264,6 +264,19 @@ function add_axon_point!(NN::Network, N::Neuron)
                 return nothing
             end
         end
+    end
+end
+function runtime_instantiate_components!(NN::Network, iteration::Integer) # instantiate neurons, dendrites and ap's depending on iteration
+    for n in get_neurons(get_all_all_cells(NN))
+        if n.den_init_interval % iteration == 0
+            add_dendrite!(NN, n)
+        end
+        if n.ap_init_interval % iteration == 0
+            add_axon_point!(NN, n)
+        end
+    end
+    if NN.neuron_init_interval % iteration == 0
+        add_neuron!(NN, rand(NN.dna_stack.n_dna_samples))
     end
 end
 function populate_network!(NN::Network, num_neurons::Integer, max_num_priors::Integer, max_num_post::Integer)
@@ -290,7 +303,8 @@ function rectify_possition!(c, nn_size::FloatN)
 end
 function clean_network_components!(NN)
     NN.components = collect(skipmissing(NN.components))
-    NN.components
+
+    println("implement - keep possition in network, behaviour")
 
     for n1 in eachindex(NN.components)
         if typeof(NN.components[n1]) == AllCell && typeof(NN.components[n1].cell) != InputNode && typeof(NN.components[n1].cell) != OutputNode
@@ -335,14 +349,6 @@ function rectifyDNA!(dna::DendriteDNA, NN::Network)
 
     dna.max_length.min = clamp(dna.max_length.min, 1., (NN.size/2)-1)
     dna.max_length.max = clamp(dna.max_length.max, dna.max_length.min+0.01, NN.size/2) # 0.01 for max > min
-
-    dna.init_pos.x.min = clamp(dna.init_pos.x.min, -NN.size, NN.size-1.)
-    dna.init_pos.x.max = clamp(dna.init_pos.x.max, dna.init_pos.x.min+0.1, NN.size)
-    dna.init_pos.y.min = clamp(dna.init_pos.y.min, -NN.size, NN.size-1.)
-    dna.init_pos.y.max = clamp(dna.init_pos.y.max, dna.init_pos.y.min+0.01, NN.size)
-    dna.init_pos.z.min = clamp(dna.init_pos.z.min, -NN.size, NN.size-1.)
-    dna.init_pos.z.max = clamp(dna.init_pos.z.max, dna.init_pos.z.min+0.01, NN.size)
-
     # return accuracy_penalty
 end
 function rectifyDNA!(dna::AxonPointDNA, NN::Network);
@@ -353,13 +359,6 @@ function rectifyDNA!(dna::AxonPointDNA, NN::Network);
 
     dna.max_length.min = clamp(dna.max_length.min, 1., (NN.size/2)-1)
     dna.max_length.max = clamp(dna.max_length.max, dna.max_length.min+0.01, NN.size/2) # 0.01 for max > min
-
-    dna.init_pos.x.min = clamp(dna.init_pos.x.min, -NN.size, NN.size-1.)
-    dna.init_pos.x.max = clamp(dna.init_pos.x.max, dna.init_pos.x.min+0.1, NN.size)
-    dna.init_pos.y.min = clamp(dna.init_pos.y.min, -NN.size, NN.size-1.)
-    dna.init_pos.y.max = clamp(dna.init_pos.y.max, dna.init_pos.y.min+0.01, NN.size)
-    dna.init_pos.z.min = clamp(dna.init_pos.z.min, -NN.size, NN.size-1.)
-    dna.init_pos.z.max = clamp(dna.init_pos.z.max, dna.init_pos.z.min+0.01, NN.size)
 
     # return accuracy_penalty
 end
@@ -396,8 +395,6 @@ function rectifyDNA!(dna::SynapsDNA, NN::Network; max_q_decay=0.1)
     dna.THR.min = clamp(dna.THR.min, 0.1, NN.max_threshold-0.1)
     dna.THR.max = clamp(dna.THR.max, dna.THR.min+0.01, NN.max_threshold)
 
-    rectifyDNA!(dna.NT, NN)
-
     # return accuracy_penalty
 end
 function rectifyDNA!(dna::NeuronDNA, NN::Network)
@@ -411,6 +408,15 @@ function rectifyDNA!(dna::NeuronDNA, NN::Network)
 
     dna.max_num_posteriors.min = max(dna.max_num_posteriors.min, 1)
     dna.max_num_posteriors.max = max(dna.max_num_posteriors.max, dna.max_num_posteriors.min+1)
+
+    dna.den_and_ap_init_range.min = max(1., dna.den_and_ap_init_range.min)
+    dna.den_and_ap_init_range.max = clamp(dna.den_and_ap_init_range.min + 0.1, NN.size/2)
+
+    dna.den_init_interval.min = max(1, dna.den_init_interval.min)
+    dna.den_init_interval.max = max(dna.den_init_interval.min+1, dna.den_init_interval.max)
+
+    dna.ap_init_interval.min = max(1, dna.ap_init_interval.min)
+    dna.ap_init_interval.max = max(dna.ap_init_interval.min+1, dna.ap_init_interval.max)
 
     dna.init_pos.x.min = clamp(dna.init_pos.x.min, -NN.size, NN.size-1.)
     dna.init_pos.x.max = clamp(dna.init_pos.x.max, dna.init_pos.x.min+0.1, NN.size)
@@ -443,43 +449,15 @@ function rectifyDNA!(dna::DNAStack, NN::Network)
     # return accuracy_penalty
 end
 function rectifyDNA!(dna::NetworkDNA)
-    # test = [copy(dna.networkSize.min),
-    #         copy(dna.networkSize.min),
-    #         copy(dna.maxNeuronLifeTime.min),
-    #         copy(dna.maxNeuronLifeTime.max),
-    #         copy(dna.maxSynapsLifeTime.min),
-    #         copy(dna.maxSynapsLifeTime.max),
-    #         copy(dna.maxDendriteLifeTime.min),
-    #         copy(dna.maxDendriteLifeTime.max),
-    #         copy(dna.maxAxonPointLifeTime.min),
-    #         copy(dna.maxAxonPointLifeTime.max)]
     # accuracy_penalty = 0. # how many values had to be changed as baseline negative fitness
 
     dna.networkSize.min = max(1., dna.networkSize.min)
     dna.networkSize.max = max(dna.networkSize.min+1., dna.networkSize.max)
-    # accuracy_penalty += (dna.networkSize.min != test[1])
-    # accuracy_penalty += (dna.networkSize.max != test[2])
 
-    dna.maxNeuronLifeTime.min = max(1., dna.maxNeuronLifeTime.min)
-    dna.maxNeuronLifeTime.max = max(dna.maxNeuronLifeTime.min+1., dna.maxNeuronLifeTime.max)
-    # accuracy_penalty += (dna.maxNeuronLifeTime.min != test[3])
-    # accuracy_penalty += (dna.maxNeuronLifeTime.max != test[4])
+    dna.ap_sink_force.min = max(0.1, dna.ap_sink_force.min)
+    dna.ap_sink_force.max = max(dna.ap_sink_force.min+0.1, dna.ap_sink_force.max)
 
-    dna.maxSynapsLifeTime.min = max(1., dna.maxSynapsLifeTime.min)
-    dna.maxSynapsLifeTime.max = max(dna.maxSynapsLifeTime.min+1., dna.maxSynapsLifeTime.max)
-    # accuracy_penalty += (dna.maxSynapsLifeTime.min != test[5])
-    # accuracy_penalty += (dna.maxSynapsLifeTime.max != test[6])
+    dna.neuron_repel_force.min = max(0.01, dna.neuron_repel_force.min)
+    dna.neuron_repel_force.max = max(dna.neuron_repel_force.min+0.1, dna.neuron_repel_force.max)
 
-    dna.maxDendriteLifeTime.min = max(1., dna.maxDendriteLifeTime.min)
-    dna.maxDendriteLifeTime.max = max(dna.maxDendriteLifeTime.min+1., dna.maxDendriteLifeTime.max)
-    # accuracy_penalty += (dna.maxDendriteLifeTime.min != test[7])
-    # accuracy_penalty += (dna.maxDendriteLifeTime.max != test[8])
-
-    dna.maxAxonPointLifeTime.min = max(1., dna.maxAxonPointLifeTime.min)
-    dna.maxAxonPointLifeTime.max = max(dna.maxAxonPointLifeTime.min+1., dna.maxAxonPointLifeTime.max)
-    # accuracy_penalty += (dna.maxAxonPointLifeTime.min != test[9])
-    # accuracy_penalty += (dna.maxAxonPointLifeTime.max != test[10])
-
-    # return accuracy_penalty
-    return nothing
 end

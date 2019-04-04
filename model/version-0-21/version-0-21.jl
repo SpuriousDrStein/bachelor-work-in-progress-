@@ -70,6 +70,8 @@ for i in 1:1000
 
     # println(NN.components[1])
     clean_network_components!(NN)
+
+    runtime_instantiate_components!(NN, i)
 end
 
 
