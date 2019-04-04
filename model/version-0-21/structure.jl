@@ -151,6 +151,7 @@ mutable struct Network
     fitness_decay::FloatN
     random_fluctuation_scale::FloatN
     neuron_init_interval::Integer
+    min_ap_den_init_interval::Integer
     dna_stack::DNAStack
 
     # change at t

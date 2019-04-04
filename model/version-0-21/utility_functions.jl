@@ -115,6 +115,7 @@ function unfold(dna::NetworkDNA,
                 max_threshold::FloatN,
                 random_fluctuation_scale::FloatN,
                 neuron_init_interval::Integer,
+                min_ap_den_init_interval::Integer,
                 dna_stack;
                 fitness_decay=0.99,
                 init_fitness=0)
@@ -125,7 +126,7 @@ function unfold(dna::NetworkDNA,
     return Network(size, mNlife, mSlife, mDlife, mAlife, min_fuse_distance,
                     sink_force, nrf, max_nt_dispersion_strength_scale,
                     max_threshold, fitness_decay, random_fluctuation_scale,
-                    neuron_init_interval, dna_stack, [], [],
+                    neuron_init_interval, min_ap_den_init_interval, dna_stack, [], [],
                     init_life_decay, init_fitness, 0, 0)
 end
 

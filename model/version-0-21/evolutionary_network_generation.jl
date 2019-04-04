@@ -17,14 +17,8 @@ INIT_NUM_NEURONS                    = 20
 DNA_SAMPLE_SIZE                     = 4
 INIT_MAX_PRIORS                     = 5
 INIT_MAX_POSTERIORS                 = 5 # how many ap's can be created at instantiation time
-
-NET_DNA = NetworkDNA(NETWORK_SIZE,
-                    MAX_NEURON_LIFETIME,
-                    MAX_SYNAPTIC_LIFETIME,
-                    MAX_DENDRITE_LIFETIME,
-                    MAX_AXONPOINT_LIFETIME,
-                    AP_SINK_ATTRACTIVE_FORCE,
-                    NEURON_REPEL_FORCE)
+NEURON_INIT_INTERVAL                = 100
+MIN_AP_DEN_INIT_INTERVAL            = 20 # a minimum to negate the possibility of calling the add_dendrite or add_axon_point function every timestep
 
 
 # THE NETWORK PREDICTING NETWORK
@@ -33,14 +27,14 @@ den_sample_output_size = DNA_SAMPLE_SIZE * 3 * 2
 nt_sample_output_size = DNA_SAMPLE_SIZE * 3 * 2 + (2 * 3) # + (2 * 3) for 3 min-max pairs per possition in init_pos
 syn_sample_output_size = DNA_SAMPLE_SIZE * 3 * 2
 n_sample_output_size = DNA_SAMPLE_SIZE * 5 * 2 + (2 * 3) # the same as nt
-net_sample_output_size = 3 # net_size, ap_sink_force and neuron_repel_force
+net_sample_output_size = 3 * 2 # net_size, ap_sink_force and neuron_repel_force
 
 # input_size = 100
 input_size = ap_sample_output_size + den_sample_output_size + nt_sample_output_size + syn_sample_output_size + n_sample_output_size
 latent_size = 40
 latent_activation = Flux.sigmoid
 MIN_RECONSTRUCTION_LOSS = 10 # if above this threshold - do more reconstruction effort
-
+OUTPUT_SCALE = 10 # coefficient to scale output of dna prediction on to create a more truthfull reconstruction of the high variance space that is the networks parameters
 
 DECODER_HIDDENS = [50, 30, 20]
 ENCODER_HIDDENS = [90, 60, 40, 30]
@@ -49,11 +43,16 @@ ENCODER_HIDDENS = [90, 60, 40, 30]
 function initialize(net_dna, dna_stack)
     rectifyDNA!(net_dna)
     nn = unfold(net_dna,
+                MAX_NEURON_LIFETIME,
+                MAX_SYNAPTIC_LIFETIME,
+                MAX_DENDRITE_LIFETIME,
+                MAX_AXONPOINT_LIFETIME,
                 MIN_FUSE_DISTANCE,
                 LIFE_DECAY,
                 MAX_NT_DISPERSION_STRENGTH_SCALE,
                 MAX_THRESHOLD,
                 RANDOM_FLUCTUATION,
+                NEURON_INIT_INTERVAL,
                 dna_stack,
                 fitness_decay=fitness_decay)
 
@@ -98,24 +97,64 @@ net_model = Flux.Chain(
             Flux.Dense(DECODER_HIDDENS[end], net_sample_output_size, Flux.relu))
 
 
-x = rand(input_size)
-z1 = encoder_model(x)
+function train(episodes, iterations, data)
+    # devide data
 
-nt_dna = nt_model(z1)
-ap_dna = ap_model(z1)
-den_dna = den_model(z1)
-syn_dna = syn_model(z1)
-n_dna = neuron_model(z1)
-net_dna = net_model(z1)
+    # "   "
 
-rec_x = [nt_dna..., ap_dna..., den_dna..., syn_dna..., n_dna..., net_dna...]
+    best_network_dna = []
+
+    # instantiate network
+    for e in 1:episodes
+        false_x = rand(input_size)
+        z1 = encoder_model(false_x)
+
+        nt_dna1 = nt_model(z1)
+        ap_dna1 = ap_model(z1)
+        den_dna1 = den_model(z1)
+        syn_dna1 = syn_model(z1)
+        n_dna1 = neuron_model(z1)
+        net_dna1 = net_model(z1)
+        f_y = [nt_dna1..., ap_dna1..., den_dna1..., syn_dna1..., n_dna1..., net_dna1...] .* OUTPUT_SCALE
+
+        # train encoder and decoder on reconstruction loss
+        z2 = encoder_model(f_y)
+
+        nt_dna2 = nt_model(z2)
+        ap_dna2 = ap_model(z2)
+        den_dna2 = den_model(z2)
+        syn_dna2 = syn_model(z2)
+        n_dna2 = neuron_model(z2)
+        net_dna2 = net_model(z2)
+
+        rec_f_y = [nt_dna2..., ap_dna2..., den_dna2..., syn_dna2..., n_dna2..., net_dna2...] .* OUTPUT_SCALE
+
+        if Flux.mse(f_y, rec_f_y) >= MIN_RECONSTRUCTION_LOSS
+            reconstruction_loss = Flux.mse(f_y, rec_f_y)
+
+            # train encoder and decoder on reconstruction loss
+        end
 
 
-if Flux.mse(x, rec_x) >= MIN_RECONSTRUCTION_LOSS
-    reconstruction_loss = Flux.mse(x, rec_x)
+        # use network
+        for i in 1:iterations
 
-    # train encoder and decoder on reconstruction loss
+
+            # train decoder
+            # observe efficiency of dna
+            den_sinks, ap_sinks = value_step!(NN, [x])
+            state_step!(NN, den_sinks, ap_sinks)
+            clean_network_components!(NN)
+            runtime_instantiate_components!(NN, i)
+
+
+        end
+
+        # save (total_reward -> network_dna)
+
+    end
 end
+
 
 
 # run training for N number of networks
@@ -125,8 +164,8 @@ end
 
 
 
-# reihenfolge
 
+# order:
 # dna_stack
 #   nt_dna_samples
 #       init_strength,
