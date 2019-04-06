@@ -49,7 +49,7 @@ mutable struct NeuronDNA
     max_num_priors::min_max_pair
     max_num_posteriors::min_max_pair
     lifeTime::min_max_pair
-    den_and_ap_init_range::FloatN
+    den_and_ap_init_range::min_max_pair
     den_init_interval::min_max_pair
     ap_init_interval::min_max_pair
 end

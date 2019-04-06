@@ -72,10 +72,10 @@ function sample(min_max::min_max_pair)
 end
 
 # DNA GENERATOR FUNCTIONS
-function unfold(dna::DendriteDNA, possition::Possition)
+function unfold(dna::DendriteDNA, possition::Possition)::Dendrite
     return Dendrite(sample(dna.max_length), sample(dna.lifeTime), possition)
 end
-function unfold(dna::AxonPointDNA, possition::Possition)
+function unfold(dna::AxonPointDNA, possition::Possition)::AxonPoint
     return AxonPoint(sample(dna.max_length), sample(dna.lifeTime), possition)
 end
 function unfold(dna::SynapsDNA, s_id::Integer, possition::Possition, NT::NeuroTransmitter, life_decay::FloatN)::Synaps
@@ -89,12 +89,12 @@ function unfold(dna::NeuronDNA, pos::Possition, n_id::Integer)::Neuron
     num_priors = sample(dna.max_num_priors)
     num_posteriors = sample(dna.max_num_posteriors)
     den_and_ap_init_range = sample(dna.den_and_ap_init_range)
-    den_init_interval = sample(dna.den_init_interval)
-    ap_init_interval = sample(dna.ap_init_interval)
+    den_init_interval = round(sample(dna.den_init_interval))
+    ap_init_interval = round(sample(dna.ap_init_interval))
 
 
     # println(pos, lifetime, num_priors, num_posteriors)
-    return Neuron(n_id, den_init_invterval, ap_init_interval, den_and_ap_init_range, pos, 0., lifetime, [missing for _ in 1:num_priors], [missing for _ in 1:num_posteriors], 0., 0.)
+    return Neuron(n_id, den_init_interval, ap_init_interval, den_and_ap_init_range, pos, 0., lifetime, [missing for _ in 1:num_priors], [missing for _ in 1:num_posteriors], 0., 0.)
 end
 function unfold(dna::NeuroTransmitterDNA, init_region_center::Possition)
     pos = init_region_center + sample(dna.dispersion_region)

@@ -231,7 +231,7 @@ function fuse!(network_node::AllCell, ac::AllCell)
     end
 end
 function add_neuron!(NN::Network)
-    n = unfold(rand(NN.dna_stack.n_dna_samples), get_random_init_possition(NN.size) , copy(NN.n_id_counter))
+    n = unfold(rand(NN.dna_stack.n_dna_samples), sample(get_random_init_possition(NN.size)), copy(NN.n_id_counter))
     NN.n_id_counter += 1
 
     rectify_possition!(n, NN.size)
@@ -242,7 +242,7 @@ function add_dendrite!(NN::Network, N::Neuron)
     if has_empty_prior(N)
         for i in eachindex(N.priors)
             if ismissing(N.priors[i])
-                d = AllCell(unfold(rand(NN.dna_stack.den_dna_samples), N.possition + get_random_init_possition(N.den_and_ap_init_range)))
+                d = AllCell(unfold(rand(NN.dna_stack.den_dna_samples), N.possition + sample(get_random_init_possition(N.den_and_ap_init_range))))
                 rectify_possition!(d.cell, NN.size)
 
                 N.priors[i] = d
@@ -256,7 +256,7 @@ function add_axon_point!(NN::Network, N::Neuron)
     if has_empty_post(N)
         for i in eachindex(N.posteriors)
             if ismissing(N.posteriors[i])
-                ap = AllCell(unfold(rand(NN.dna_stack.ap_dna_samples), N.possition + get_random_init_possition(N.den_and_ap_init_range)))
+                ap = AllCell(unfold(rand(NN.dna_stack.ap_dna_samples), N.possition + sample(get_random_init_possition(N.den_and_ap_init_range))))
                 rectify_possition!(ap.cell, NN.size)
 
                 N.posteriors[i] = ap
@@ -282,7 +282,7 @@ end
 function populate_network!(NN::Network, num_neurons::Integer, max_num_priors::Integer, max_num_post::Integer)
     for _ in 1:num_neurons
         # add_neuron! adds it to component list as well
-        n = add_neuron!(NN, rand(NN.dna_stack.n_dna_samples))
+        n = add_neuron!(NN)
 
         for _ in 1:rand(1:max_num_priors)
             add_dendrite!(NN, n)
@@ -315,6 +315,7 @@ function clean_network_components!(NN)
                 NN.components[n1] = missing
             end
 
+            # remove duplicates in NN.components
             if !ismissing(NN.components[n1])
                 if typeof(NN.components[n1].cell) == Synaps
                     for n2 in eachindex(NN.components)
@@ -410,20 +411,13 @@ function rectifyDNA!(dna::NeuronDNA, NN::Network)
     dna.max_num_posteriors.max = max(dna.max_num_posteriors.max, dna.max_num_posteriors.min+1)
 
     dna.den_and_ap_init_range.min = max(1., dna.den_and_ap_init_range.min)
-    dna.den_and_ap_init_range.max = clamp(dna.den_and_ap_init_range.min + 0.1, NN.size/2)
+    dna.den_and_ap_init_range.max = max(dna.den_and_ap_init_range.max, dna.den_and_ap_init_range.min + 0.1)
 
     dna.den_init_interval.min = max(1, dna.den_init_interval.min)
     dna.den_init_interval.max = max(dna.den_init_interval.min+1, dna.den_init_interval.max)
 
     dna.ap_init_interval.min = max(1, dna.ap_init_interval.min)
     dna.ap_init_interval.max = max(dna.ap_init_interval.min+1, dna.ap_init_interval.max)
-
-    dna.init_pos.x.min = clamp(dna.init_pos.x.min, -NN.size, NN.size-1.)
-    dna.init_pos.x.max = clamp(dna.init_pos.x.max, dna.init_pos.x.min+0.1, NN.size)
-    dna.init_pos.y.min = clamp(dna.init_pos.y.min, -NN.size, NN.size-1.)
-    dna.init_pos.y.max = clamp(dna.init_pos.y.max, dna.init_pos.y.min+0.01, NN.size)
-    dna.init_pos.z.min = clamp(dna.init_pos.z.min, -NN.size, NN.size-1.)
-    dna.init_pos.z.max = clamp(dna.init_pos.z.max, dna.init_pos.z.min+0.01, NN.size)
 
     # return accuracy_penalty
 end
