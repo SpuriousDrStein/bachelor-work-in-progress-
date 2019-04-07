@@ -8,7 +8,7 @@ include("structure.jl")
 include("functions.jl")
 
 # NETWORK HP's
-init_params = Dict("MAX_NEURON_LIFETIME"            => FloatN(100000),
+init_params =   Dict("MAX_NEURON_LIFETIME"          => FloatN(100000),
                 "MAX_SYNAPTIC_LIFETIME"             => FloatN(100000),
                 "MAX_DENDRITE_LIFETIME"             => FloatN(10000),
                 "MAX_AXONPOINT_LIFETIME"            => FloatN(10000),
@@ -25,18 +25,16 @@ init_params = Dict("MAX_NEURON_LIFETIME"            => FloatN(100000),
                 "INIT_MAX_POSTERIORS"               => 5, # how many ap's can be created at instantiation time
                 "NEURON_INIT_INTERVAL"              => 100,
                 "MIN_AP_DEN_INIT_INTERVAL"          => 20, # a minimum to negate the possibility of calling the add_dendrite or add_axon_point function every timestep
-                )
+                "MIN_RECONSTRUCTION_LOSS"           => 10, # if above this threshold - do more reconstruction effort
+                "DATA_INPUT_SIZE"                   => 4,
+                "DATA_OUTPUT_SIZE"                  => 2,
+                "OUTPUT_SCALE"                      => 10, # coefficient to scale output of dna prediction on to create a more truthfull reconstruction of the high variance space that is the networks parameters
+                "LATENT_SIZE"                       => 40,
+                "LATENT_ACTIVATION"                 => Flux.sigmoid,
+                "DNA_SAMPLE_SIZE"                   => 6,
+                "DECODER_HIDDENS"                   => [50, 30, 20],
+                "ENCODER_HIDDENS"                   => [90, 60, 40, 30])
 
-net_params = Dict("MIN_RECONSTRUCTION_LOSS" => 10, # if above this threshold - do more reconstruction effort
-                    "DATA_INPUT_SIZE" => 4,
-                    "DATA_OUTPUT_SIZE" => 2,
-                    "OUTPUT_SCALE" => 10, # coefficient to scale output of dna prediction on to create a more truthfull reconstruction of the high variance space that is the networks parameters
-                    "LATENT_SIZE" => 40,
-                    "LATENT_ACTIVATION" => Flux.sigmoid,
-                    "DNA_SAMPLE_SIZE" => 6,
-                    "DECODER_HIDDENS" => [50, 30, 20],
-                    "ENCODER_HIDDENS" => [90, 60, 40, 30]
-                    )
 
 
 net_episodes = 10
@@ -46,9 +44,7 @@ parallel_networks = 4 # how many networks at one time (no multi-threading)
 env = :CartPole
 v = :v0
 
-unsupervised_train(net_episodes, env_episodes, iterations, parallel_networks, env, v, init_params, net_params)
-
-
+unsupervised_train(net_episodes, env_episodes, iterations, parallel_networks, env, v, init_params)
 
 
 # # TESTING

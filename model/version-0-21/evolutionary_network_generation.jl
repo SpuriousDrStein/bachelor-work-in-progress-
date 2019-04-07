@@ -14,15 +14,17 @@ function init_network_generating_network(params::Dict)
     net_latent_size = params["LATENT_SIZE"]
     latent_activation = params["LATENT_ACTIVATION"]
 
+    println("net_input_size = $net_input_size")
+
     encoder_model = Flux.Chain(
         Flux.Dense(net_input_size, params["ENCODER_HIDDENS"][1]),
         [Flux.Dense(params["ENCODER_HIDDENS"][i-1], params["ENCODER_HIDDENS"][i], Flux.relu) for i in 2:length(params["ENCODER_HIDDENS"])]...,
         Flux.Dense(params["ENCODER_HIDDENS"][end], net_latent_size, latent_activation))
 
     nt_model = Flux.Chain(
-        Flux.Dense(net_latent_size, params["DECODER_HIDDENS"][1], Flux.relu),
-        [Flux.Dense(params["DECODER_HIDDENS"][i-1], params["DECODER_HIDDENS"][i], Flux.relu) for i in 2:length(params["DECODER_HIDDENS"])]...,
-        Flux.Dense(params["DECODER_HIDDENS"][end], nt_sample_output_size, Flux.relu))
+        Flux.Dense(net_latent_size, params["DECODER_HIDDENS"][1], Flux.leakyrelu),
+        [Flux.Dense(params["DECODER_HIDDENS"][i-1], params["DECODER_HIDDENS"][i], Flux.leakyrelu) for i in 2:length(params["DECODER_HIDDENS"])]...,
+        Flux.Dense(params["DECODER_HIDDENS"][end], nt_sample_output_size, Flux.leakyrelu))
 
     ap_model = Flux.Chain(
         Flux.Dense(net_latent_size, params["DECODER_HIDDENS"][1], Flux.relu),
@@ -73,9 +75,15 @@ function initialize(net_dna, dna_stack, params)
                 params["MIN_AP_DEN_INIT_INTERVAL"],
                 dna_stack,
                 fitness_decay=params["FITNESS_DECAY"])
-
     rectifyDNA!(nn.dna_stack, nn)
+
+    ns = nn.size / 2.
+
+    input_nodes = [AllCell(InputNode(Possition(ns + rand(Uniform(-0.5, 1))*ns, ns + rand(Uniform(-0.5, 1))*ns, ns + rand(Uniform(-0.5, 1))*ns), 0.)) for i in 1:params["DATA_INPUT_SIZE"]]
+    out_nodes = [AllCell(OutputNode(Possition(-ns + rand(Uniform(-1, 0.5))*ns, -ns + rand(Uniform(-1, 0.5))*ns, -ns + rand(Uniform(-1, 0.5))*ns), 0.)) for i in 1:params["DATA_OUTPUT_SIZE"]]
+
     populate_network!(nn, params["INIT_NUM_NEURONS"], params["INIT_MAX_PRIORS"], params["INIT_MAX_POSTERIORS"])
+    nn.IO_components = [input_nodes..., out_nodes...]
     return nn
 end
 
@@ -173,13 +181,13 @@ end
 #     end
 # end
 
-function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterations::Integer, parallel_networks::Integer, env, env_version, init_params::Dict, net_params::Dict)
+function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterations::Integer, parallel_networks::Integer, env, env_version, params::Dict)
 
     env = OpenAIGym.GymEnv(env, env_version)
     action_index = [i for i in 1:length(env.actions)]
     action_space = one(action_index * action_index')
 
-    encoder_model, decoders, model_params = init_network_generating_network(net_params)
+    encoder_model, decoders, model_params = init_network_generating_network(params)
     # model_params = [encoder_params, decoder_params]
 
     best_net_dna = nothing
@@ -190,43 +198,48 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
         xs = []
 
         for n in 1:parallel_networks
-            rand_z = rand(net_params["LATENT_SIZE"]); append!(zs, rand_z);
-            rand_x = decode(rand_z, decoders ,net_params["OUTPUT_SCALE"]); append!(xs, rand_x);
+            rand_z = rand(params["LATENT_SIZE"])
+            rand_x = decode(rand_z, decoders ,params["OUTPUT_SCALE"])
+            append!(zs, [rand_z]);
+            append!(xs, [rand_x]);
 
-            net_dna, dna_stack = get_dna(rand_x, net_params["DNA_SAMPLE_SIZE"])
-            net = initialize(net_dna, dna_stack, init_params)
+            net_dna, dna_stack = get_dna(rand_x, params["DNA_SAMPLE_SIZE"])
+            net = initialize(net_dna, dna_stack, params)
             I = 1 # for counting iterations
 
             # training
             for ee in 1:env_episodes
-                s = reset!(env)
+                s = OpenAIGym.reset!(env)
+
                 for i in 1:iterations
-                    den_sinks, ap_sinks = value_step!(net, s)
+                    den_sinks, ap_sinks = value_step!(net, Array(s) .+ 1)
                     state_step!(net, den_sinks, ap_sinks)
                     clean_network_components!(net)
                     runtime_instantiate_components!(net, I)
                     I += 1
 
-                    out = get_output_nodes(get_all_all_cells(net))
+                    out = [on.value for on in get_output_nodes(net)]
                     a = action_space[argmax(out)]
 
-                    r, s = step!(env, a)
+                    r, s = OpenAIGym.step!(env, a)
 
                     net.total_fitness += r
 
-                    if env.done
-                        break
-                    end
+                    println("net nr. $n -> $(net.total_fitness)")
+
+                    # if env.done
+                    #     break
+                    # end
                 end
             end
 
-            append!(nets, (rand_z => net.total_fitness))
+            append!(nets, [(copy(rand_z) => net.total_fitness)])
         end
 
         best_net_dna = collect(keys(nets))[argmax(collect(values(nets)))]
 
         z_rec_loss(x, z) = Flux.mse(encoder_model(x), zs)
-        x_rec_loss(x, rx) = Flux.mse(decode(encoder_model(x), net_params["OUTPUT_SCALE"]), rx)
+        x_rec_loss(x, rx) = Flux.mse(decode(encoder_model(x), params["OUTPUT_SCALE"]), rx)
 
         # only train on reconstruction if above min loss
 
@@ -234,7 +247,8 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
         x_rec_train_set = [(xs[i], xs[i]) for i in eachindex(xs)]
         better_x_train_set = [(xs[i], best_net_dna) for i in eachindex(xs)]
 
-        if x_rec_loss(rand(length(best_net_dna)) .* net_params["OUTPUT_SCALE"], rand(length(best_net_dna)) .* net_params["OUTPUT_SCALE"]) > net_params["MIN_RECONSTRUCTION_LOSS"]
+        test_rec_x = rand(length(best_net_dna)) .* params["OUTPUT_SCALE"]
+        if x_rec_loss(test_rec_x, test_rec_x)  > params["MIN_RECONSTRUCTION_LOSS"]
             Flux.train!(z_rec_loss, model_params[1], z_rec_train_set, Flux.SGD)
             Flux.train!(x_rec_loss, [model_params[1]..., model_params[2]...], x_rec_train_set, Flux.SGD)
         end
