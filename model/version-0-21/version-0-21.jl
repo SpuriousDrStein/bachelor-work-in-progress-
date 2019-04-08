@@ -20,6 +20,7 @@ init_params =   Dict("MAX_NEURON_LIFETIME"          => FloatN(100000),
                 "LIFE_DECAY"                        => FloatN(0.1),
                 "FITNESS_DECAY"                     => FloatN(0.99),
                 "RANDOM_FLUCTUATION"                => FloatN(0.05),
+                "LEARNING_RATE"                     => 0.03,
                 "INIT_NUM_NEURONS"                  => 20,
                 "INIT_MAX_PRIORS"                   => 5,
                 "INIT_MAX_POSTERIORS"               => 5, # how many ap's can be created at instantiation time
@@ -45,6 +46,25 @@ env = :CartPole
 v = :v0
 
 unsupervised_train(net_episodes, env_episodes, iterations, parallel_networks, env, v, init_params)
+
+
+encoder_model, decoders, model_params = init_network_generating_network(init_params)
+m1 = Flux.Chain(
+    Flux.Dense(100, 50),
+    Flux.Dense(50, 10))
+m2 = Flux.Chain(
+    Flux.Dense(100, 30),
+    Flux.Dense(30, 5))
+
+forward(x) = [m1(x)...,m2(x)...]
+
+loss(x, y) = Flux.mse(forward(x), y)
+
+p = [Flux.params(m1)..., Flux.params(m2)...]
+
+Flux.train!(loss, p, [(rand(100), rand(15))], Flux.ADAM())
+
+
 
 
 # # TESTING

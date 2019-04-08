@@ -75,7 +75,7 @@ function value_step!(NN::Network, input::Array)
     end
 
     if get_all_neurons(NN) == []
-        println("exit value step because no neurons exist")
+        # println("exit value step because no neurons exist")
         NN.total_fitness -= 50
         return [], []
     end
@@ -130,7 +130,7 @@ function state_step!(NN::Network, den_sinks, ap_sinks)
     out_nodes = get_output_nodes_in_all(NN)
 
     if get_all_neurons(NN) == []
-        println("exit state step because no neurons exist")
+        # println("exit state step because no neurons exist")
         return [], []
     end
 
@@ -310,10 +310,11 @@ end
 function clean_network_components!(NN)
     NN.components = collect(skipmissing(NN.components))
 
-    println("implement - keep possition in network, behaviour")
-    println("implement - keep possition max range, behaviour")
+    # println("implement - keep possition in network, behaviour")
+    # println("implement - keep possition max range, behaviour")
 
     for n1 in eachindex(NN.components)
+
         if typeof(NN.components[n1]) == AllCell && typeof(NN.components[n1].cell) != InputNode && typeof(NN.components[n1].cell) != OutputNode
             if NN.components[n1].cell.lifeTime <= 0
                 if typeof(NN.components[n1]) == Synaps
@@ -322,9 +323,18 @@ function clean_network_components!(NN)
                 NN.components[n1] = missing
             end
 
-            # remove duplicates in NN.components
             if !ismissing(NN.components[n1])
-                if typeof(NN.components[n1].cell) == Synaps
+                # update possition to be inside network
+                if vector_length(NN.components[n1].cell.possition) > NN.size
+                    NN.components[n1].cell.possition = Possition((normalize(NN.components[n1].cell.possition) .* NN.size)...)
+                end
+                # update possition to be inside max_range
+                if typeof(NN.components[n1].cell) != Synaps
+                    if vector_length(NN.components[n1].cell.possition) > NN.components[n1].cell.max_length
+                        NN.components[n1].cell.possition = Possition((normalize(NN.components[n1].cell.possition) .* NN.components[n1].cell.max_length)...)
+                    end
+                else #if typeof(NN.components[n1].cell) == Synaps
+                    # remove duplicates in NN.components
                     for n2 in eachindex(NN.components)
                         if typeof(NN.components[n2]) == AllCell
                             if typeof(NN.components[n2].cell) == Synaps
