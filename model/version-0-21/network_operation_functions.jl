@@ -21,7 +21,7 @@ function accm!(N::Neuron, all_synapses::Array, dispersion_collection::Dict, fitn
             # calculate new fitness values
             N.fitness += length(input_syns)
             N.fitness += sum(input_v)
-            N.fitness *= NN.fitness_decay
+            N.fitness *= fitness_decay
             N.total_fitness += N.fitness
         else
             N.Q = 0.
@@ -81,37 +81,40 @@ function value_step!(NN::Network, input::Array)
     end
 
     if network_all_cells != []
-        # 2
-        for n_i in n_ind
-            accm!(NN.components[n_i], get_synapses(network_all_cells), dispersion_collection, NN.fitness_decay) #all_synapses::Array{Synaps}, dispersion_collection::Dict{Synaps, Pair{FloatN, Integer}}
-        end
-
-        # 3
-        # this puts the NT(t-1) and then calculates NT(t)
-        # this can be reversed
-        for s in get_synapses_in_all(network_all_cells)
-            if s.cell.Q >= s.cell.THR
-                s.cell.Q = 0.
-                s.cell.total_fitness += 1
-                s.cell.total_fitness *= NN.fitness_decay
-            else
-                updateQ!(s.cell)
-                s.cell.total_fitness *= NN.fitness_decay
+        if get_synapses(network_all_cells) != []
+            # 2
+            for n_i in n_ind
+                accm!(NN.components[n_i], get_synapses(network_all_cells), dispersion_collection, NN.fitness_decay) #all_synapses::Array{Synaps}, dispersion_collection::Dict{Synaps, Pair{FloatN, Integer}}
             end
 
-            dispersion_value, n = get(dispersion_collection, s.cell, (1, 1))
-            avg_NT_change = dispersion_value/n
+            # 3
+            # this puts the NT(t-1) and then calculates NT(t)
+            # this can be reversed
+            for s in get_synapses_in_all(network_all_cells)
+                if s.cell.Q >= s.cell.THR
+                    s.cell.Q = 0.
+                    s.cell.total_fitness += 1
+                    s.cell.total_fitness *= NN.fitness_decay
+                else
+                    updateQ!(s.cell)
+                    s.cell.total_fitness *= NN.fitness_decay
+                end
 
-            # change nt and update syn-fitness
-            s.cell.total_fitness += ((avg_NT_change+s.cell.NT.strength)/2)/(abs(avg_NT_change-s.cell.NT.strength)+0.00001)
-            s.cell.NT.strength = s.cell.NT.retain_percentage * s.cell.NT.strength + (1-s.cell.NT.retain_percentage) * avg_NT_change
+                dispersion_value, n = get(dispersion_collection, s.cell, (1, 1))
+                avg_NT_change = dispersion_value/n
 
-            s.cell.lifeTime -= NN.life_decay
+                # change nt and update syn-fitness
+                s.cell.total_fitness += ((avg_NT_change+s.cell.NT.strength)/2)/(abs(avg_NT_change-s.cell.NT.strength)+0.00001)
+                s.cell.NT.strength = s.cell.NT.retain_percentage * s.cell.NT.strength + (1-s.cell.NT.retain_percentage) * avg_NT_change
+
+                s.cell.lifeTime -= NN.life_decay
+            end
         end
 
-
-        for d in get_dendrites_in_all(network_all_cells)
-            append!(ap_sinks, [Sink(d.cell.possition, NN.ap_sink_attractive_force)])
+        if get_dendrites_in_all(network_all_cells) != []
+            for d in get_dendrites_in_all(network_all_cells)
+                append!(ap_sinks, [Sink(d.cell.possition, NN.ap_sink_attractive_force)])
+            end
         end
     end
 
@@ -298,7 +301,18 @@ function populate_network!(NN::Network, num_neurons::Integer, max_num_priors::In
         end
     end
 end
-
+function reset_network_components!(NN::Network)
+    if get_all_neurons(NN) != []
+        for n in get_all_neurons(NN)
+            n.Q = 0.
+        end
+    end
+    if get_all_all_cells(NN) != []
+        for s in get_synapses(get_all_all_cells(NN))
+            s.Q = 0.
+        end
+    end
+end
 
 
 # VERIFICATION FUNCTIONS
@@ -307,7 +321,7 @@ function rectify_possition!(c, nn_size::FloatN)
         c.possition = Possition((normalize(c.possition) * nn_size)...)
     end
 end
-function clean_network_components!(NN)
+function clean_network_components!(NN::Network)
     NN.components = collect(skipmissing(NN.components))
 
     # println("implement - keep possition in network, behaviour")

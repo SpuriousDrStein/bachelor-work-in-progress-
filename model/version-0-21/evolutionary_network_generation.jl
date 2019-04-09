@@ -190,14 +190,17 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
     action_space = one(action_index * action_index')
 
     encoder_model, decoders, model_params = init_network_generating_network(params)
-    # model_params = [encoder_params, decoder_params]
+    z_rec_loss(x, z) = Flux.mse(encoder_model(x), z)
+    x_rec_loss(x, rx) = Flux.mse(decode(encoder_model(x), decoders, params["OUTPUT_SCALE"]), rx)
 
-    best_net_dna = nothing
+    total_best_net = [-9999999, []]
+    metrics = Dict([("rec_loss" => []), ("best_net_fitness" => [])])
 
     for e in 1:net_episodes
         nets = []
         zs = []
         xs = []
+        current_best_net = [-99999999, []]
         println("episode: $e")
 
         for n in 1:parallel_networks
@@ -214,8 +217,10 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
             for ee in 1:env_episodes
                 s = OpenAIGym.reset!(env)
 
+                reset_network_components!(net)
+
                 for i in 1:iterations
-                    den_sinks, ap_sinks = value_step!(net, Array(s) .+ .5)
+                    den_sinks, ap_sinks = value_step!(net, Array(s) .+ .5) # + .5 to produce preferable non negative values
                     state_step!(net, den_sinks, ap_sinks)
                     clean_network_components!(net)
                     runtime_instantiate_components!(net, I)
@@ -229,139 +234,51 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
                     net.total_fitness += r
 
 
-                    # if env.done
-                    #     break
-                    # end
+                    if env.done
+                        break
+                    end
                 end
             end
 
             println("net $n fitness: $(net.total_fitness)")
-            append!(nets, [(copy(rand_x) => net.total_fitness)])
+            append!(nets, [(net.total_fitness => copy(Flux.Tracker.data.(rand_x)))])
         end
 
-        best_net_dna = collect(keys(nets))[argmax(collect(values(nets)))]
+        current_best_net .= [sort(nets)[end][1], [n[2] for n in sort(nets)][end]]
+        println("best_net_reward $(current_best_net[1])")
+        append!(metrics["best_net_fitness"], current_best_net[1]) # [sort(nets)[end][1]])
 
-        # println(encoder_model)
-
-        z_rec_loss(x, z) = begin
-            pr = encoder_model(x)
-            Flux.mse(pr, z)
+        if current_best_net[1] > total_best_net[1]
+            total_best_net = current_best_net
         end
-        x_rec_loss(x, rx) = Flux.mse(decode(encoder_model(x), decoders, params["OUTPUT_SCALE"]), rx')
 
-        z_rec_train_set = [(Flux.Tracker.data(xs[i]), Flux.Tracker.data(zs[i])) for i in eachindex(xs, zs)]
-        x_rec_train_set = [(Flux.Tracker.data(xs[i]), Flux.Tracker.data(xs[i])) for i in eachindex(xs)]
-        better_x_train_set = [(Flux.Tracker.data(xs[i]), best_net_dna) for i in eachindex(xs)]
+        z_rec_train_set = [(Flux.Tracker.data.(xs[i]), zs[i]) for i in eachindex(xs, zs)]
+        x_rec_train_set = [(Flux.Tracker.data.(xs[i]), Flux.Tracker.data.(xs[i])) for i in eachindex(xs)]
+        best_current_x_train_set = [(Flux.Tracker.data.(xs[i]), current_best_net[2]) for i in eachindex(xs)]
+        best_total_x_train_set = [(Flux.Tracker.data.(xs[i]), total_best_net[2]) for i in eachindex(xs)]
 
-        println(xs[1])
-        # println(x_rec_train_set[1])
-        # println(better_x_train_set[1])
+
+        if any([x_rec_loss(t...) == NaN for t in best_current_x_train_set]) || any([x_rec_loss(t...) == Inf for t in best_current_x_train_set])
+            Flux.train!(x_rec_loss, model_params[2], best_current_x_train_set, Flux.Descent(params["LEARNING_RATE"]))
+        end
+        if any([x_rec_loss(t...) == NaN for t in best_total_x_train_set]) || any([x_rec_loss(t...) == Inf for t in best_total_x_train_set])
+            Flux.train!(x_rec_loss, model_params[2], best_total_x_train_set, Flux.Descent(params["LEARNING_RATE"]))
+            Flux.train!(x_rec_loss, model_params[2], best_total_x_train_set, Flux.Descent(params["LEARNING_RATE"]))
+            Flux.train!(x_rec_loss, model_params[2], best_total_x_train_set, Flux.Descent(params["LEARNING_RATE"]))
+        end
 
         # only train on reconstruction if above min loss
         test_rec_x = rand(length(xs[1])) .* params["OUTPUT_SCALE"]
         if x_rec_loss(test_rec_x, test_rec_x)  > params["MIN_RECONSTRUCTION_LOSS"]
-            Flux.train!(z_rec_loss, model_params[1], z_rec_train_set,  Flux.Descent(params["LEARNING_RATE"]))
-            Flux.train!(x_rec_loss, [model_params[1]..., model_params[2]...], x_rec_train_set, Flux.Descent(params["LEARNING_RATE"]))
+            if any([z_rec_loss(t...) == NaN for t in z_rec_train_set]) || any([z_rec_loss(t...) == Inf for t in z_rec_train_set])
+                Flux.train!(z_rec_loss, model_params[1], z_rec_train_set,  Flux.Descent(params["LEARNING_RATE"]))
+            end
+            if any([x_rec_loss(t...) == NaN for t in x_rec_train_set]) || any([x_rec_loss(t...) == Inf for t in x_rec_train_set])
+                Flux.train!(x_rec_loss, [model_params[1]..., model_params[2]...], x_rec_train_set, Flux.Descent(params["LEARNING_RATE"]))
+            end
         end
-
-        Flux.train!(x_rec_loss, model_params[2], better_x_train_set, Flux.Descent(params["LEARNING_RATE"]))
+        append!(metrics["rec_loss"], [x_rec_loss(test_rec_x, test_rec_x)])
     end
 
-    return best_net_dna
+    return total_best_net, metrics
 end
-
-
-
-# order:
-# dna_stack
-#   nt_dna_samples
-#       init_strength,
-#       dispersion_region,
-#       dispersion_strength_scale,
-#       retain_percentage
-#   ap_dna_samples
-#       max_length
-#       lifeTime
-#   den_dna_samples
-#       max_length
-#       lifeTime
-#   syn_dna_samples
-#       THR
-#       QDecay
-#       lifeTime
-#   n_dna_samples
-#       max_num_priors
-#       max_num_posteriors
-#       lifeTime
-#       dna_and_ap_init_range
-#       den_init_interval
-#       ap_init_interval
-#   nn_dna
-#       networkSize
-#       ap_sink_force
-#       neuron_repel_force
-
-
-
-# sadly useless
-# function collect_dna(NN::Network, nn_dna::NetworkDNA)
-#     collection = []
-#     n_samples = NN.dna_stack.n_dna_samples
-#
-#     for nts in NN.dna_stack.nt_dna_samples
-#         append!(collection, nts.init_strength.min)
-#         append!(collection, nts.init_strength.max)
-#         append!(collection, nts.dispersion_region.x.min)
-#         append!(collection, nts.dispersion_region.x.max)
-#         append!(collection, nts.dispersion_region.y.min)
-#         append!(collection, nts.dispersion_region.y.max)
-#         append!(collection, nts.dispersion_region.z.min)
-#         append!(collection, nts.dispersion_region.z.max)
-#         append!(collection, nts.dispersion_strength_scale.min)
-#         append!(collection, nts.dispersion_strength_scale.max)
-#         append!(collection, nts.retain_percentage.min)
-#         append!(collection, nts.retain_percentage.max)
-#     end
-#     for aps in NN.dna_stack.ap_dna_samples
-#         append!(collection, aps.max_length.min)
-#         append!(collection, aps.max_length.max)
-#         append!(collection, aps.lifeTime.min)
-#         append!(collection, aps.lifeTime.max)
-#     end
-#     for dens in NN.dna_stack.den_dna_samples
-#         append!(collection, dens.max_length.min)
-#         append!(collection, dens.max_length.max)
-#         append!(collection, dens.lifeTime.min)
-#         append!(collection, dens.lifeTime.max)
-#     end
-#     for syns in NN.dna_stack.syn_dna_samples
-#         append!(collection, syns.THR.min)
-#         append!(collection, syns.THR.max)
-#         append!(collection, syns.QDecay.min)
-#         append!(collection, syns.QDecay.max)
-#         append!(collection, syns.lifeTime.min)
-#         append!(collection, syns.lifeTime.max)
-#     end
-#     for ns in NN.dna_stack.n_dna_samples
-#         append!(collection, ns.max_num_priors.min)
-#         append!(collection, ns.max_num_priors.max)
-#         append!(collection, ns.max_num_posteriors.min)
-#         append!(collection, ns.max_num_posteriors.max)
-#         append!(collection, ns.lifeTime.min)
-#         append!(collection, ns.lifeTime.max)
-#         append!(collection, ns.dna_and_ap_init_range.min)
-#         append!(collection, ns.dna_and_ap_init_range.max)
-#         append!(collection, ns.den_init_interval.min)
-#         append!(collection, ns.den_init_interval.max)
-#         append!(collection, ns.ap_init_interval.min)
-#         append!(collection, ns.ap_init_interval.max)
-#     end
-#
-#     append!(collection, nn_dna.networkSize.min)
-#     append!(collection, nn_dna.networkSize.max)
-#     append!(collection, nn_dna.ap_sink_force.min)
-#     append!(collection, nn_dna.ap_sink_force.max)
-#     append!(collection, nn_dna.neuron_repel_force.min)
-#     append!(collection, nn_dna.neuron_repel_force.max)
-#     return collection
-# end
