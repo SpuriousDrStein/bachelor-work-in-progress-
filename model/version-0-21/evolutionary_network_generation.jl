@@ -194,7 +194,7 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
     x_rec_loss(x, rx) = Flux.mse(decode(encoder_model(x), decoders, params["OUTPUT_SCALE"]), rx)
 
     total_best_net = [-9999999, []]
-    metrics = Dict([("rec_loss" => []), ("best_net_fitness" => [])])
+    metrics = Dict([("rec_loss" => []), ("best_net_fitness" => []), [("net_$(n)_final_neurons" => []) for n in 1:parallel_networks]...])
 
     for e in 1:net_episodes
         nets = []
@@ -231,14 +231,15 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
 
                     r, s = OpenAIGym.step!(env, a)
 
-                    net.total_fitness += r
-
+                    net.total_fitness += r * 50
 
                     if env.done
                         break
                     end
                 end
             end
+
+            append!(metrics["net_$(n)_final_neurons"], [length(get_all_neurons(net))])
 
             println("net $n fitness: $(net.total_fitness)")
             append!(nets, [(net.total_fitness => copy(Flux.Tracker.data.(rand_x)))])
@@ -281,4 +282,46 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
     end
 
     return total_best_net, metrics
+end
+
+
+function unsupervised_testing(env_episodes::Integer, iterations::Integer, net_dna, env, env_version, params::Dict)
+    env = OpenAIGym.GymEnv(env, env_version)
+    action_index = [i for i in 1:length(env.actions)]
+    action_space = one(action_index * action_index')
+    I = 1
+
+    net_dna, stack = get_dna(net_dna, params["DNA_SAMPLE_SIZE"])
+    net = initialize(net_dna, stack, init_params)
+
+    for e in 1:net_episodes
+        println("episode: $e")
+
+        for ee in 1:env_episodes
+            s = OpenAIGym.reset!(env)
+
+            reset_network_components!(net)
+
+            for i in 1:iterations
+                den_sinks, ap_sinks = value_step!(net, Array(s) .+ .5) # + .5 to produce preferable non negative values
+                state_step!(net, den_sinks, ap_sinks)
+                clean_network_components!(net)
+                runtime_instantiate_components!(net, I)
+                I += 1
+
+                out = [on.value for on in get_output_nodes(net)]
+                a = action_space[argmax(out)]
+
+                _, s = OpenAIGym.step!(env, a)
+
+                # net.total_fitness += r
+
+                OpenAIGym.render(env)
+
+                # if env.done
+                #     break
+                # end
+            end
+        end
+    end
 end

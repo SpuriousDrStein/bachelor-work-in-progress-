@@ -76,7 +76,7 @@ function value_step!(NN::Network, input::Array)
 
     if get_all_neurons(NN) == []
         # println("exit value step because no neurons exist")
-        NN.total_fitness -= 50
+        NN.total_fitness -= 10
         return [], []
     end
 
