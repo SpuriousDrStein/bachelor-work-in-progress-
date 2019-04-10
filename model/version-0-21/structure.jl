@@ -17,41 +17,31 @@ end
 
 
 # DNA STRUCTURES
-mutable struct min_max_pair
-    min::Number
-    max::Number
-end
-mutable struct InitializationPossition
-    x::min_max_pair
-    y::min_max_pair
-    z::min_max_pair
-end
 mutable struct DendriteDNA
-    max_length::min_max_pair
-    lifeTime::min_max_pair
+    max_length::FloatN
+    lifeTime::FloatN
 end
 mutable struct AxonPointDNA
-    max_length::min_max_pair
-    lifeTime::min_max_pair
+    max_length::FloatN
+    lifeTime::FloatN
 end
 mutable struct NeuroTransmitterDNA
-    init_strength::min_max_pair # mean should be 1 for most "accurate" effect
-    dispersion_region::InitializationPossition
-    dispersion_strength_scale::min_max_pair
-    retain_percentage::min_max_pair
+    init_strength::FloatN # mean should be 1 for most "accurate" effect
+    dispersion_region::Possition
+    retain_percentage::FloatN
 end
 mutable struct SynapsDNA
-    THR::min_max_pair
-    QDecay::min_max_pair
-    lifeTime::min_max_pair
+    THR::FloatN
+    QDecay::FloatN
+    lifeTime::FloatN
 end
 mutable struct NeuronDNA
-    max_num_priors::min_max_pair
-    max_num_posteriors::min_max_pair
-    lifeTime::min_max_pair
-    den_and_ap_init_range::min_max_pair
-    den_init_interval::min_max_pair
-    ap_init_interval::min_max_pair
+    max_num_priors::FloatN
+    max_num_posteriors::FloatN
+    lifeTime::FloatN
+    den_and_ap_init_range::FloatN
+    den_init_interval::FloatN
+    ap_init_interval::FloatN
 end
 mutable struct DNAStack
     nt_dna_samples::Array{NeuroTransmitterDNA}
@@ -61,10 +51,8 @@ mutable struct DNAStack
     n_dna_samples::Array{NeuronDNA}
 end
 mutable struct NetworkDNA
-    networkSize::min_max_pair
-
-    ap_sink_force::min_max_pair
-    neuron_repel_force::min_max_pair
+    ap_sink_force::FloatN
+    neuron_repel_force::FloatN
 end
 
 
@@ -139,6 +127,7 @@ end
 mutable struct Network
     # constants
     size::FloatN
+    global_stdv::FloatN
     maxNeuronLifeTime::FloatN
     maxSynapsLifeTime::FloatN
     maxDendriteLifeTime::FloatN
@@ -146,7 +135,7 @@ mutable struct Network
     minFuseDistance::FloatN
     ap_sink_attractive_force::FloatN # force: AxonPoint's -> ap_sinks
     neuron_repel_force::FloatN
-    max_nt_dispersion_strength_scale::FloatN
+    max_nt_strength::FloatN
     max_threshold::FloatN
     fitness_decay::FloatN
     random_fluctuation_scale::FloatN

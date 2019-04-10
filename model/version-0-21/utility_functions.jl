@@ -57,80 +57,73 @@ normalize(p::Possition) = [p.x, p.y, p.z] ./ vector_length(p)
 normalize(v::Vector) = v ./ vector_length(v)
 
 
-
+function get_random_possition(range)
+    return Possition(rand(Uniform(-range, range)), rand(Uniform(-range, range)), rand(Uniform(-range, range)))
+end
 
 # INITIALIZATION SAMPELING
-function get_random_init_possition(range::Number)
-    return InitializationPossition(min_max_pair(-range, range), min_max_pair(-range, range), min_max_pair(-range, range))
+function sample(mean::Possition, global_variance::FloatN)
+    Possition(rand(Normal(mean.x, global_variance)), rand(Normal(mean.y, global_variance)), rand(Normal(mean.z, global_variance)))
 end
-
-function sample(init_pos::InitializationPossition)
-    Possition(rand(Uniform(init_pos.x.min, init_pos.x.max)), rand(Uniform(init_pos.y.min, init_pos.y.max)), rand(Uniform(init_pos.z.min, init_pos.z.max)))
-end
-function sample(min_max::min_max_pair)
-    rand(Uniform(min_max.min, min_max.max))
+function sample(mean::FloatN, global_variance::FloatN)
+    rand(Normal(min_max, global_variance))
 end
 
 # DNA GENERATOR FUNCTIONS
-function unfold(dna::DendriteDNA, possition::Possition)::Dendrite
-    return Dendrite(sample(dna.max_length), sample(dna.lifeTime), possition)
+function unfold(dna::DendriteDNA, possition::Possition, global_variance::FloatN)::Dendrite
+    return Dendrite(sample(dna.max_length, global_variance), sample(dna.lifeTime, global_variance), possition)
 end
-function unfold(dna::AxonPointDNA, possition::Possition)::AxonPoint
-    return AxonPoint(sample(dna.max_length), sample(dna.lifeTime), possition)
+function unfold(dna::AxonPointDNA, possition::Possition, global_variance::FloatN)::AxonPoint
+    return AxonPoint(sample(dna.max_length, global_variance), sample(dna.lifeTime, global_variance), possition)
 end
-function unfold(dna::SynapsDNA, s_id::Integer, possition::Possition, NT::NeuroTransmitter, life_decay::FloatN)::Synaps
-    q_dec = sample(dna.QDecay)
-    thr = sample(dna.THR)
-    lifetime = sample(dna.lifeTime)
+function unfold(dna::SynapsDNA, s_id::Integer, possition::Possition, NT::NeuroTransmitter, life_decay::FloatN, global_variance::FloatN)::Synaps
+    q_dec = sample(dna.QDecay, global_variance)
+    thr = sample(dna.THR, global_variance)
+    lifetime = sample(dna.lifeTime, global_variance)
     return Synaps(s_id, thr, q_dec, lifetime, 0, possition, NT, 0.)
 end
-function unfold(dna::NeuronDNA, pos::Possition, n_id::Integer)::Neuron
-    lifetime = sample(dna.lifeTime)
-    num_priors = sample(dna.max_num_priors)
-    num_posteriors = sample(dna.max_num_posteriors)
-    den_and_ap_init_range = sample(dna.den_and_ap_init_range)
-    den_init_interval = round(sample(dna.den_init_interval))
-    ap_init_interval = round(sample(dna.ap_init_interval))
+function unfold(dna::NeuronDNA, pos::Possition, n_id::Integer, global_variance::FloatN)::Neuron
+    lifetime = sample(dna.lifeTime, global_variance)
+    num_priors = sample(dna.max_num_priors, global_variance)
+    num_posteriors = sample(dna.max_num_posteriors, global_variance)
+    den_and_ap_init_range = sample(dna.den_and_ap_init_range, global_variance)
+    den_init_interval = round(sample(dna.den_init_interval, global_variance))
+    ap_init_interval = round(sample(dna.ap_init_interval, global_variance))
 
-
-    # println(pos, lifetime, num_priors, num_posteriors)
     return Neuron(n_id, den_init_interval, ap_init_interval, den_and_ap_init_range, pos, 0., lifetime, [missing for _ in 1:num_priors], [missing for _ in 1:num_posteriors], 0., 0.)
 end
-function unfold(dna::NeuroTransmitterDNA, init_region_center::Possition)
-    pos = init_region_center + sample(dna.dispersion_region)
-    return NeuroTransmitter(sample(dna.strength), pos)
+function unfold(dna::NeuroTransmitterDNA, init_region_center::Possition, global_variance::FloatN)::NeuroTransmitter
+    pos = init_region_center + sample(dna.dispersion_region, global_variance)
+    return NeuroTransmitter(sample(dna.strength, global_variance), pos)
 end
-function unfold(dna::NeuroTransmitterDNA)
-    pos = sample(dna.dispersion_region)
-    return NeuroTransmitter(sample(dna.init_strength), pos, sample(dna.dispersion_strength_scale), sample(dna.retain_percentage))
+function unfold(dna::NeuroTransmitterDNA, global_variance::FloatN)
+    pos = sample(dna.dispersion_region, global_variance)
+    return NeuroTransmitter(sample(dna.init_strength, global_variance), pos, sample(dna.retain_percentage, global_variance))
 end
 function unfold(dna::NetworkDNA,
+                net_size::FloatN,
+                global_stdv::FloatN,
                 mNlife::FloatN,
                 mSlife::FloatN,
                 mDlife::FloatN,
                 mAlife::FloatN,
                 min_fuse_distance::FloatN,
-                init_life_decay::FloatN,
-                max_nt_dispersion_strength_scale::FloatN,
+                life_decay::FloatN,
+                max_nt_strength::FloatN,
                 max_threshold::FloatN,
                 random_fluctuation_scale::FloatN,
+                fitness_decay::FloatN,
                 neuron_init_interval::Integer,
                 min_ap_den_init_interval::Integer,
                 dna_stack;
-                fitness_decay=0.99,
                 init_fitness=0)
-    size = sample(dna.networkSize)
-    sink_force = sample(dna.ap_sink_force)
-    nrf = sample(dna.neuron_repel_force)
 
-    return Network(size, mNlife, mSlife, mDlife, mAlife, min_fuse_distance,
-                    sink_force, nrf, max_nt_dispersion_strength_scale,
+    sink_force = sample(dna.ap_sink_force, global_variance)
+    nrf = sample(dna.neuron_repel_force, global_variance)
+
+    return Network(net_size, global_stdv, mNlife, mSlife, mDlife, mAlife, min_fuse_distance,
+                    sink_force, nrf, max_nt_strength,
                     max_threshold, fitness_decay, random_fluctuation_scale,
                     neuron_init_interval, min_ap_den_init_interval, dna_stack, [], [],
-                    init_life_decay, init_fitness, 0, 0)
+                    life_decay, init_fitness, 0, 0)
 end
-
-
-# ACCUMULATION FUNCTIONS
-accf_sum(x) = sum(x)
-accf_mean(x) = sum(x)/length(x)

@@ -19,14 +19,12 @@ function accm!(N::Neuron, all_synapses::Array, dispersion_collection::Dict, fitn
             N.Q = sum(input_v)
 
             # calculate new fitness values
-            N.fitness += length(input_syns)
-            N.fitness += sum(input_v)
-            N.fitness *= fitness_decay
-            N.total_fitness += N.fitness
+            N.total_fitness += length(input_syns) * 5
+            N.total_fitness += sum(input_v)
+            N.total_fitness *= fitness_decay
         else
             N.Q = 0.
-
-            N.fitness *= fitness_decay
+            N.total_fitness *= fitness_decay
         end
 
         for is in input_valid_syns
@@ -93,7 +91,7 @@ function value_step!(NN::Network, input::Array)
             for s in get_synapses_in_all(network_all_cells)
                 if s.cell.Q >= s.cell.THR
                     s.cell.Q = 0.
-                    s.cell.total_fitness += 1
+                    s.cell.total_fitness += 5
                     s.cell.total_fitness *= NN.fitness_decay
                 else
                     updateQ!(s.cell)
@@ -146,7 +144,7 @@ function state_step!(NN::Network, den_sinks, ap_sinks)
                 total_v .+= normalize(dir) .* mag .* (1 + d_sink.strength)
             end
             total_v ./= length(den_sinks)
-            rand_v  = sample(get_random_init_possition(1)) * NN.random_fluctuation_scale
+            rand_v  = get_random_possition(1) * NN.random_fluctuation_scale
             den.cell.possition += Possition(total_v...) + rand_v
 
             den.cell.lifeTime -= NN.life_decay
@@ -166,7 +164,7 @@ function state_step!(NN::Network, den_sinks, ap_sinks)
                 total_v .+= normalize(dir) .* mag .* (1 + ap_sink.strength)
             end
             total_v ./= length(ap_sinks)
-            rand_v  = sample(get_random_init_possition(1)) * NN.random_fluctuation_scale
+            rand_v  = sample(get_random_possition(1)) * NN.random_fluctuation_scale
             ap.cell.possition += Possition(total_v...) + rand_v
 
             ap.cell.lifeTime -= NN.life_decay
@@ -175,7 +173,7 @@ function state_step!(NN::Network, den_sinks, ap_sinks)
             for d in get_dendrites_in_all(network_all_cells)
                 if distance(ap.cell.possition, d.cell.possition) <= NN.minFuseDistance
                     # random possition for dispersion
-                    nt = unfold(rand(NN.dna_stack.nt_dna_samples))
+                    nt = unfold(rand(NN.dna_stack.nt_dna_samples), NN.global_stdv)
 
                     # basicly rectify_possition() only for dispersion_region
                     if distance(nt.dispersion_region, Possition(0,0,0)) > NN.size
@@ -185,7 +183,7 @@ function state_step!(NN::Network, den_sinks, ap_sinks)
                     half_dist = direction(ap.cell.possition, d.cell.possition) ./ 2
                     pos = ap.cell.possition + Possition(half_dist...)
 
-                    fuse!(d, ap, unfold(rand(NN.dna_stack.syn_dna_samples), copy(NN.s_id_counter), pos , nt, NN.life_decay))
+                    fuse!(d, ap, unfold(rand(NN.dna_stack.syn_dna_samples), copy(NN.s_id_counter), pos , nt, NN.life_decay, NN.global_stdv))
                     NN.s_id_counter += 1
                 end
             end
@@ -213,7 +211,7 @@ function state_step!(NN::Network, den_sinks, ap_sinks)
             total_v[i] = normalize(local_v) .* NN.neuron_repel_force #./ (length(neurons) .- 1)
         end
         for i in eachindex(total_v, neurons)
-            rand_v  = sample(get_random_init_possition(1)) * NN.random_fluctuation_scale
+            rand_v  = sample(get_random_possition(1)) * NN.random_fluctuation_scale
             neurons[i].possition += Possition(total_v[i]...) + rand_v
         end
     end
@@ -240,7 +238,7 @@ function fuse!(network_node::AllCell, ac::AllCell)
     end
 end
 function add_neuron!(NN::Network)
-    n = unfold(rand(NN.dna_stack.n_dna_samples), sample(get_random_init_possition(NN.size)), copy(NN.n_id_counter))
+    n = unfold(rand(NN.dna_stack.n_dna_samples), sample(get_random_possition(NN.size)), copy(NN.n_id_counter), NN.global_stdv)
     NN.n_id_counter += 1
 
     rectify_possition!(n, NN.size)
@@ -251,7 +249,7 @@ function add_dendrite!(NN::Network, N::Neuron)
     if has_empty_prior(N)
         for i in eachindex(N.priors)
             if ismissing(N.priors[i])
-                d = AllCell(unfold(rand(NN.dna_stack.den_dna_samples), N.possition + sample(get_random_init_possition(N.den_and_ap_init_range))))
+                d = AllCell(unfold(rand(NN.dna_stack.den_dna_samples), N.possition + sample(get_random_possition(N.den_and_ap_init_range)), NN.global_stdv))
                 rectify_possition!(d.cell, NN.size)
 
                 N.priors[i] = d
@@ -265,7 +263,7 @@ function add_axon_point!(NN::Network, N::Neuron)
     if has_empty_post(N)
         for i in eachindex(N.posteriors)
             if ismissing(N.posteriors[i])
-                ap = AllCell(unfold(rand(NN.dna_stack.ap_dna_samples), N.possition + sample(get_random_init_possition(N.den_and_ap_init_range))))
+                ap = AllCell(unfold(rand(NN.dna_stack.ap_dna_samples), N.possition + get_random_possition(N.den_and_ap_init_range)), NN.global_stdv))
                 rectify_possition!(ap.cell, NN.size)
 
                 N.posteriors[i] = ap
@@ -376,87 +374,35 @@ end
 
 
 function rectifyDNA!(dna::DendriteDNA, NN::Network)
-    # accuracy_penalty = 0 # how many values had to be changed as baseline negative fitness
-
-    dna.lifeTime.min = clamp(dna.lifeTime.min, 1., NN.maxDendriteLifeTime-1)
-    dna.lifeTime.max = clamp(dna.lifeTime.max, dna.lifeTime.min+1, NN.maxDendriteLifeTime)
-
-    dna.max_length.min = max(1., dna.max_length.min)
-    dna.max_length.max = max(dna.max_length.min+0.1, dna.max_length.max)
-    # return accuracy_penalty
+    dna.lifeTime = clamp(dna.lifeTime, 1., NN.maxDendriteLifeTime)
+    dna.max_length = max(1., dna.max_length)
 end
 function rectifyDNA!(dna::AxonPointDNA, NN::Network);
-    # accuracy_penalty = 0 # how many values had to be changed as baseline negative fitness
-
-    dna.lifeTime.min = clamp(dna.lifeTime.min, 1., NN.maxDendriteLifeTime-2.)
-    dna.lifeTime.max = clamp(dna.lifeTime.max, dna.lifeTime.min+1, NN.maxDendriteLifeTime)
-
-    dna.max_length.min = max(1., dna.max_length.min)
-    dna.max_length.max = max(dna.max_length.min+0.1, dna.max_length.max)
-
-    # return accuracy_penalty
+    dna.lifeTime = clamp(dna.lifeTime, 1., NN.maxDendriteLifeTime)
+    dna.max_length = max(1., dna.max_length)
 end
 function rectifyDNA!(dna::NeuroTransmitterDNA, NN::Network)
-    # accuracy_penalty = 0 # how many values had to be changed as baseline negative fitness
+    dna.init_strength = clamp(dna.init_strength, 0.5, NN.max_nt_strength) # 0.5 because everything below negates more than 50% of input
+    dna.retain_percentage = clamp(dna.retain_percentage, 0, 1)
 
-    dna.init_strength.min = max(dna.init_strength.min, 0.5)
-    dna.init_strength.max = max(dna.init_strength.min+0.01, dna.init_strength.max)
-
-    dna.dispersion_strength_scale.min = clamp(dna.dispersion_strength_scale.min, 0.1, NN.max_nt_dispersion_strength_scale-0.02)
-    dna.dispersion_strength_scale.max = clamp(dna.dispersion_strength_scale.max, dna.dispersion_strength_scale.min+0.01, NN.max_nt_dispersion_strength_scale)
-
-    dna.retain_percentage.min = clamp(dna.retain_percentage.min, 0, 0.9)
-    dna.retain_percentage.max = clamp(dna.retain_percentage.max, dna.retain_percentage.min+0.01, 1)
-
-    dna.dispersion_region.x.min = clamp(dna.dispersion_region.x.min, -NN.size+1., NN.size-1.)
-    dna.dispersion_region.x.max = clamp(dna.dispersion_region.x.max, dna.dispersion_region.x.min+0.1, NN.size)
-    dna.dispersion_region.y.min = clamp(dna.dispersion_region.y.min, -NN.size+1., NN.size-1.)
-    dna.dispersion_region.y.max = clamp(dna.dispersion_region.y.max, dna.dispersion_region.y.min+0.1, NN.size)
-    dna.dispersion_region.z.min = clamp(dna.dispersion_region.z.min, -NN.size+1., NN.size-1.)
-    dna.dispersion_region.z.max = clamp(dna.dispersion_region.z.max, dna.dispersion_region.z.min+0.1, NN.size)
-
-    # return accuracy_penalty
+    dna.dispersion_region.x = clamp(dna.dispersion_region.x, -NN.size, NN.size)
+    dna.dispersion_region.y = clamp(dna.dispersion_region.y, -NN.size, NN.size)
+    dna.dispersion_region.z = clamp(dna.dispersion_region.z, -NN.size, NN.size)
 end
 function rectifyDNA!(dna::SynapsDNA, NN::Network)
-    # accuracy_penalty = 0 # how many values had to be changed as baseline negative fitness
-
-    dna.lifeTime.min = clamp(dna.lifeTime.min, 1., NN.maxSynapsLifeTime-2.)
-    dna.lifeTime.max = clamp(dna.lifeTime.max, dna.lifeTime.min+0.1, NN.maxSynapsLifeTime)
-
-    dna.QDecay.min = clamp(dna.QDecay.min, 0.1, 0.97)
-    dna.QDecay.max = clamp(dna.QDecay.max, dna.QDecay.min+0.01, 0.99)
-
-    dna.THR.min = clamp(dna.THR.min, 0.1, NN.max_threshold-0.2)
-    dna.THR.max = clamp(dna.THR.max, dna.THR.min+0.1, NN.max_threshold)
-
-    # return accuracy_penalty
+    dna.lifeTime = clamp(dna.lifeTime, 1., NN.maxSynapsLifeTime)
+    dna.QDecay = clamp(dna.QDecay, 0.1, 0.99)
+    dna.THR = clamp(dna.THR, 0.1, NN.max_threshold)
 end
 function rectifyDNA!(dna::NeuronDNA, NN::Network)
-    # accuracy_penalty = 0 # how many values had to be changed as baseline negative fitness
-
-    dna.lifeTime.min = clamp(dna.lifeTime.min, 1., NN.maxNeuronLifeTime-2.)
-    dna.lifeTime.max = clamp(dna.lifeTime.max, dna.lifeTime.min+1., NN.maxNeuronLifeTime)
-
-    dna.max_num_priors.min = max(1, dna.max_num_priors.min)
-    dna.max_num_priors.max = max(dna.max_num_priors.min+1, dna.max_num_priors.max)
-
-    dna.max_num_posteriors.min = max(1, dna.max_num_posteriors.min)
-    dna.max_num_posteriors.max = max(dna.max_num_posteriors.min+1, dna.max_num_posteriors.max)
-
-    dna.den_and_ap_init_range.min = max(1., dna.den_and_ap_init_range.min)
-    dna.den_and_ap_init_range.max = max(dna.den_and_ap_init_range.min+0.1, dna.den_and_ap_init_range.max)
-
-    dna.den_init_interval.min = max(1, dna.den_init_interval.min)
-    dna.den_init_interval.max = max(dna.den_init_interval.min+1, dna.den_init_interval.max)
-
-    dna.ap_init_interval.min = max(1, dna.ap_init_interval.min)
-    dna.ap_init_interval.max = max(dna.ap_init_interval.min+1, dna.ap_init_interval.max)
-
-    # return accuracy_penalty
+    dna.lifeTime = clamp(dna.lifeTime, 1., NN.maxNeuronLifeTime)
+    dna.max_num_priors = max(1, dna.max_num_priors)
+    dna.max_num_posteriors = max(1, dna.max_num_posteriors)
+    dna.den_and_ap_init_range = max(1., dna.den_and_ap_init_range)
+    dna.den_init_interval = max(1, dna.den_init_interval)
+    dna.ap_init_interval = max(1, dna.ap_init_interval)
 end
 function rectifyDNA!(dna::DNAStack, NN::Network)
-    # accuracy_penalty = 0 # how many values had to be changed as baseline negative fitness
-
     for nt_dna_s in dna.nt_dna_samples
         rectifyDNA!(nt_dna_s, NN)
     end
@@ -472,19 +418,8 @@ function rectifyDNA!(dna::DNAStack, NN::Network)
     for n_dna_s in dna.n_dna_samples
         rectifyDNA!(n_dna_s, NN)
     end
-
-    # return accuracy_penalty
 end
-function rectifyDNA!(dna::NetworkDNA; min_net_size=5.)
-    # accuracy_penalty = 0. # how many values had to be changed as baseline negative fitness
-
-    dna.networkSize.min = max(min_net_size, dna.networkSize.min)
-    dna.networkSize.max = max(dna.networkSize.min+1., dna.networkSize.max)
-
-    dna.ap_sink_force.min = max(0.1, dna.ap_sink_force.min)
-    dna.ap_sink_force.max = max(dna.ap_sink_force.min+0.1, dna.ap_sink_force.max)
-
-    dna.neuron_repel_force.min = max(0.01, dna.neuron_repel_force.min)
-    dna.neuron_repel_force.max = max(dna.neuron_repel_force.min+0.01, dna.neuron_repel_force.max)
-
+function rectifyDNA!(dna::NetworkDNA)
+    dna.ap_sink_force = max(0.1, dna.ap_sink_force)
+    dna.neuron_repel_force = max(0.01, dna.neuron_repel_force)
 end
