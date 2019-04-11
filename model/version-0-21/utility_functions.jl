@@ -30,18 +30,18 @@ get_all_neuron_indecies(NN::Network) = [i for i in 1:length(NN.components)][type
 get_prior_all_cells(N::Neuron) = [n for n in skipmissing(N.priors) if typeof(n) == AllCell]
 get_posterior_all_cells(N::Neuron) = [n for n in skipmissing(N.posteriors) if typeof(n) == AllCell]
 
-get_neurons(subnet::Subnet, neuron_collection::Array{Neuron}) = [n for n in skipmissing(neuron_collection) if distance(n.possition, subnet.possition) < subnet.range]
-get_dendrites(subnet::Subnet, den_collection::Array{Dendrite}) = [d for d in skipmissing(den_collection) if distance(d.possition, subnet.possition) < subnet.range]
-get_axon_points(subnet::Subnet, ap_collection::Array{AxonPoint}) = [ap for ap in skipmissing(ap_collection) if distance(ap.possition, subnet.possition) <= subnet.range]
-get_synapses(subnet::Subnet, syn_collection::Array{Synaps}) = [syn for syn in skipmissing(syn_collection) if distance(syn.possition, subnet.possition) <= subnet.range]
+get_neurons(subnet::Subnet, neuron_collection::Array{Neuron}) = [n for n in skipmissing(neuron_collection) if distance(n.position, subnet.position) < subnet.range]
+get_dendrites(subnet::Subnet, den_collection::Array{Dendrite}) = [d for d in skipmissing(den_collection) if distance(d.position, subnet.position) < subnet.range]
+get_axon_points(subnet::Subnet, ap_collection::Array{AxonPoint}) = [ap for ap in skipmissing(ap_collection) if distance(ap.position, subnet.position) <= subnet.range]
+get_synapses(subnet::Subnet, syn_collection::Array{Synaps}) = [syn for syn in skipmissing(syn_collection) if distance(syn.position, subnet.position) <= subnet.range]
 
-get_all_possitions(NN::Network) = begin
+get_all_positions(NN::Network) = begin
     a = []
     for c in skipmissing(NN.components)
         if typeof(c) == Neuron
-            append!(a, c.possition)
+            append!(a, c.position)
         else
-            append!(a, c.cell.possition)
+            append!(a, c.cell.position)
         end
     end
 end
@@ -49,56 +49,58 @@ end
 
 
 # SPATIAL FUNCTIONS
-direction(from::Possition, to::Possition) = [to.x, to.y, to.z] .- [from.x, from.y, from.z]
-distance(p1::Possition, p2::Possition) = sqrt(sum(direction(p1,p2).^2))
-vector_length(p::Possition) = sqrt(sum([p.x, p.y, p.z].^2))
+direction(from::Position, to::Position) = [to.x, to.y, to.z] .- [from.x, from.y, from.z]
+distance(p1::Position, p2::Position) = sqrt(sum(direction(p1,p2).^2))
+vector_length(p::Position) = sqrt(sum([p.x, p.y, p.z].^2))
 vector_length(v::Vector) = sqrt(sum(v.^2))
-normalize(p::Possition) = [p.x, p.y, p.z] ./ vector_length(p)
+normalize(p::Position) = [p.x, p.y, p.z] ./ vector_length(p)
 normalize(v::Vector) = v ./ vector_length(v)
 
 
-function get_random_possition(range)
-    return Possition(rand(Uniform(-range, range)), rand(Uniform(-range, range)), rand(Uniform(-range, range)))
+function get_random_position(range)
+    return Position(rand(Uniform(-range, range)), rand(Uniform(-range, range)), rand(Uniform(-range, range)))
 end
 
 # INITIALIZATION SAMPELING
-function sample(mean::Possition, global_variance::FloatN)
-    Possition(rand(Normal(mean.x, global_variance)), rand(Normal(mean.y, global_variance)), rand(Normal(mean.z, global_variance)))
-end
-function sample(mean::FloatN, global_variance::FloatN)
-    rand(Normal(min_max, global_variance))
+function sample(mean::FloatN, global_stdv::FloatN)
+    rand(Normal(mean, global_stdv))
 end
 
 # DNA GENERATOR FUNCTIONS
-function unfold(dna::DendriteDNA, possition::Possition, global_variance::FloatN)::Dendrite
-    return Dendrite(sample(dna.max_length, global_variance), sample(dna.lifeTime, global_variance), possition)
-end
-function unfold(dna::AxonPointDNA, possition::Possition, global_variance::FloatN)::AxonPoint
-    return AxonPoint(sample(dna.max_length, global_variance), sample(dna.lifeTime, global_variance), possition)
-end
-function unfold(dna::SynapsDNA, s_id::Integer, possition::Possition, NT::NeuroTransmitter, life_decay::FloatN, global_variance::FloatN)::Synaps
-    q_dec = sample(dna.QDecay, global_variance)
-    thr = sample(dna.THR, global_variance)
-    lifetime = sample(dna.lifeTime, global_variance)
-    return Synaps(s_id, thr, q_dec, lifetime, 0, possition, NT, 0.)
-end
-function unfold(dna::NeuronDNA, pos::Possition, n_id::Integer, global_variance::FloatN)::Neuron
-    lifetime = sample(dna.lifeTime, global_variance)
-    num_priors = sample(dna.max_num_priors, global_variance)
-    num_posteriors = sample(dna.max_num_posteriors, global_variance)
-    den_and_ap_init_range = sample(dna.den_and_ap_init_range, global_variance)
-    den_init_interval = round(sample(dna.den_init_interval, global_variance))
-    ap_init_interval = round(sample(dna.ap_init_interval, global_variance))
+function unfold(dna::DendriteDNA, position::Position, NN::Network)::Dendrite
+    max_length = max(1., sample(dna.max_length, NN.global_stdv))
+    lifetime = clamp(sample(dna.lifeTime, NN.global_stdv), 1., NN.maxDendriteLifeTime)
 
-    return Neuron(n_id, den_init_interval, ap_init_interval, den_and_ap_init_range, pos, 0., lifetime, [missing for _ in 1:num_priors], [missing for _ in 1:num_posteriors], 0., 0.)
+    return Dendrite(max_length, lifetime, position)
 end
-function unfold(dna::NeuroTransmitterDNA, init_region_center::Possition, global_variance::FloatN)::NeuroTransmitter
-    pos = init_region_center + sample(dna.dispersion_region, global_variance)
-    return NeuroTransmitter(sample(dna.strength, global_variance), pos)
+function unfold(dna::AxonPointDNA, position::Position, NN::Network)::AxonPoint
+    max_length = max(1., sample(dna.max_length, NN.global_stdv))
+    lifetime = clamp(sample(dna.lifeTime, NN.global_stdv), 1., NN.maxAxonPointLifeTime)
+
+    return AxonPoint(max_length, lifetime, position)
 end
-function unfold(dna::NeuroTransmitterDNA, global_variance::FloatN)
-    pos = sample(dna.dispersion_region, global_variance)
-    return NeuroTransmitter(sample(dna.init_strength, global_variance), pos, sample(dna.retain_percentage, global_variance))
+function unfold(dna::SynapsDNA, position::Position, NT::NeuroTransmitter, NN::Network)::Synaps
+    q_dec = clamp(sample(dna.QDecay, NN.global_stdv), 0.1, 0.99)
+    thr = clamp(sample(dna.THR, NN.global_stdv), 0.1, NN.max_threshold)
+    lifetime = clamp(sample(dna.lifeTime, NN.global_stdv), 1., NN.maxSynapsLifeTime)
+
+    return Synaps(copy(NN.s_id_counter), thr, q_dec, lifetime, 0, position, NT, 0.)
+end
+function unfold(dna::NeuronDNA, pos::Position, NN::Network)::Neuron
+    lifetime = clamp(sample(dna.lifeTime, NN.global_stdv), 1., NN.maxNeuronLifeTime)
+    num_priors = round(max(1, sample(dna.max_num_priors, NN.global_stdv)))
+    num_posteriors = round(max(1, sample(dna.max_num_posteriors, NN.global_stdv)))
+    den_and_ap_init_range = max(1., sample(dna.den_and_ap_init_range, NN.global_stdv))
+    den_init_interval = round(max(sample(dna.den_init_interval, NN.global_stdv), NN.min_ap_den_init_interval))
+    ap_init_interval = round(max(sample(dna.ap_init_interval, NN.global_stdv), NN.min_ap_den_init_interval))
+
+    return Neuron(copy(NN.n_id_counter), den_init_interval, ap_init_interval, den_and_ap_init_range, pos, 0., lifetime, [missing for _ in 1:num_priors], [missing for _ in 1:num_posteriors], 0., 0.)
+end
+function unfold(dna::NeuroTransmitterDNA, NN::Network)::NeuroTransmitter
+    str = clamp(sample(dna.init_strength, NN.global_stdv), 0.5, NN.max_nt_strength)
+    retain_percentage = clamp(sample(dna.retain_percentage, NN.global_stdv), 0, 0.5) # 0.5 -> there should be minimum loss of own value for nt interations
+
+    return NeuroTransmitter(str, retain_percentage)
 end
 function unfold(dna::NetworkDNA,
                 net_size::FloatN,
@@ -118,8 +120,8 @@ function unfold(dna::NetworkDNA,
                 dna_stack;
                 init_fitness=0)
 
-    sink_force = sample(dna.ap_sink_force, global_variance)
-    nrf = sample(dna.neuron_repel_force, global_variance)
+    sink_force = sample(dna.ap_sink_force, global_stdv)
+    nrf = sample(dna.neuron_repel_force, global_stdv)
 
     return Network(net_size, global_stdv, mNlife, mSlife, mDlife, mAlife, min_fuse_distance,
                     sink_force, nrf, max_nt_strength,

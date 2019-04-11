@@ -28,7 +28,7 @@ function accm!(N::Neuron, all_synapses::Array, dispersion_collection::Dict, fitn
         end
 
         for is in input_valid_syns
-            for s in get_synapses(Subnet(is.NT.dispersion_region, is.NT.range_scale * (is.Q - is.THR)), all_synapses)
+            for s in get_synapses(Subnet(is.position, (is.Q - is.THR)), all_synapses)
                 if s in keys(dispersion_collection)
                     dispersion_collection[s] = dispersion_collection[s] .+ (s.NT.strength, 1)
                 else
@@ -49,7 +49,7 @@ function propergate!(N::Neuron, sink_list::Array)
         s.Q += N.Q/length(post_all)
     end
     for ap in post_aps
-        append!(sink_list, [Sink(ap.possition, N.Q/length(post_all))])
+        append!(sink_list, [Sink(ap.position, N.Q/length(post_all))])
     end
     for p_o in post_out
         p_o.value = N.Q/length(post_all)
@@ -64,12 +64,12 @@ function value_step!(NN::Network, input::Array)
 
     dispersion_collection = Dict()
     den_sinks = []
-    ap_sinks = [Sink(o_n.cell.possition, NN.ap_sink_attractive_force) for o_n in out_nodes] # array of ap sinks
+    ap_sinks = [Sink(o_n.cell.position, NN.ap_sink_attractive_force) for o_n in out_nodes] # array of ap sinks
 
     # 1
     for i in eachindex(in_nodes, input)
         in_nodes[i].cell.value = input[i]
-        append!(den_sinks, [Sink(in_nodes[i].cell.possition, in_nodes[i].cell.value)])
+        append!(den_sinks, [Sink(in_nodes[i].cell.position, in_nodes[i].cell.value)])
     end
 
     if get_all_neurons(NN) == []
@@ -111,7 +111,7 @@ function value_step!(NN::Network, input::Array)
 
         if get_dendrites_in_all(network_all_cells) != []
             for d in get_dendrites_in_all(network_all_cells)
-                append!(ap_sinks, [Sink(d.cell.possition, NN.ap_sink_attractive_force)])
+                append!(ap_sinks, [Sink(d.cell.position, NN.ap_sink_attractive_force)])
             end
         end
     end
@@ -139,18 +139,18 @@ function state_step!(NN::Network, den_sinks, ap_sinks)
         for den in get_dendrites_in_all(network_all_cells)
             total_v = [0.,0.,0.]
             for d_sink in den_sinks
-                dir = direction(den.cell.possition, d_sink.possition)
+                dir = direction(den.cell.position, d_sink.position)
                 mag = NN.minFuseDistance / vector_length(dir)
                 total_v .+= normalize(dir) .* mag .* (1 + d_sink.strength)
             end
             total_v ./= length(den_sinks)
-            rand_v  = get_random_possition(1) * NN.random_fluctuation_scale
-            den.cell.possition += Possition(total_v...) + rand_v
+            rand_v  = get_random_position(1) * NN.random_fluctuation_scale
+            den.cell.position += Position(total_v...) + rand_v
 
             den.cell.lifeTime -= NN.life_decay
 
             for i_n in get_input_nodes_in_all(NN)
-                if distance(den.cell.possition, i_n.cell.possition) <= NN.minFuseDistance
+                if distance(den.cell.position, i_n.cell.position) <= NN.minFuseDistance
                     fuse!(i_n, den)
                 end
             end
@@ -159,36 +159,31 @@ function state_step!(NN::Network, den_sinks, ap_sinks)
         for ap in get_axon_points_in_all(network_all_cells)
             total_v = [0.,0.,0.]
             for ap_sink in ap_sinks
-                dir = direction(ap.cell.possition, ap_sink.possition)
+                dir = direction(ap.cell.position, ap_sink.position)
                 mag = NN.minFuseDistance / vector_length(dir)
                 total_v .+= normalize(dir) .* mag .* (1 + ap_sink.strength)
             end
             total_v ./= length(ap_sinks)
-            rand_v  = sample(get_random_possition(1)) * NN.random_fluctuation_scale
-            ap.cell.possition += Possition(total_v...) + rand_v
+            rand_v  = get_random_position(1) * NN.random_fluctuation_scale
+            ap.cell.position += Position(total_v...) + rand_v
 
             ap.cell.lifeTime -= NN.life_decay
 
             # fuse with dendrite if near
             for d in get_dendrites_in_all(network_all_cells)
-                if distance(ap.cell.possition, d.cell.possition) <= NN.minFuseDistance
-                    # random possition for dispersion
-                    nt = unfold(rand(NN.dna_stack.nt_dna_samples), NN.global_stdv)
+                if distance(ap.cell.position, d.cell.position) <= NN.minFuseDistance
 
-                    # basicly rectify_possition() only for dispersion_region
-                    if distance(nt.dispersion_region, Possition(0,0,0)) > NN.size
-                        nt.dispersion_region = Possition((normalize(nt.dispersion_region) * NN.size)...)
-                    end
+                    half_dist = direction(ap.cell.position, d.cell.position) ./ 2
+                    pos = ap.cell.position + Position(half_dist...)
 
-                    half_dist = direction(ap.cell.possition, d.cell.possition) ./ 2
-                    pos = ap.cell.possition + Possition(half_dist...)
+                    nt = unfold(rand(NN.dna_stack.nt_dna_samples), NN)
 
-                    fuse!(d, ap, unfold(rand(NN.dna_stack.syn_dna_samples), copy(NN.s_id_counter), pos , nt, NN.life_decay, NN.global_stdv))
+                    fuse!(d, ap, unfold(rand(NN.dna_stack.syn_dna_samples), pos, nt, NN))
                     NN.s_id_counter += 1
                 end
             end
             for o_n in get_output_nodes_in_all(NN)
-                if distance(ap.cell.possition, o_n.cell.possition) <= NN.minFuseDistance
+                if distance(ap.cell.position, o_n.cell.position) <= NN.minFuseDistance
                     fuse!(o_n, ap)
                 end
             end
@@ -204,15 +199,15 @@ function state_step!(NN::Network, den_sinks, ap_sinks)
 
             for n in neurons
                 if neurons[i] !== n
-                     local_v += direction(n.possition, neurons[i].possition)
+                     local_v += direction(n.position, neurons[i].position)
                 end
             end
 
             total_v[i] = normalize(local_v) .* NN.neuron_repel_force #./ (length(neurons) .- 1)
         end
         for i in eachindex(total_v, neurons)
-            rand_v  = sample(get_random_possition(1)) * NN.random_fluctuation_scale
-            neurons[i].possition += Possition(total_v[i]...) + rand_v
+            rand_v  = get_random_position(1) * NN.random_fluctuation_scale
+            neurons[i].position += Position(total_v[i]...) + rand_v
         end
     end
 end
@@ -238,10 +233,9 @@ function fuse!(network_node::AllCell, ac::AllCell)
     end
 end
 function add_neuron!(NN::Network)
-    n = unfold(rand(NN.dna_stack.n_dna_samples), sample(get_random_possition(NN.size)), copy(NN.n_id_counter), NN.global_stdv)
+    n = unfold(rand(NN.dna_stack.n_dna_samples), get_random_position(NN.size), NN)
     NN.n_id_counter += 1
 
-    rectify_possition!(n, NN.size)
     append!(NN.components, [n])
     return n
 end
@@ -249,8 +243,8 @@ function add_dendrite!(NN::Network, N::Neuron)
     if has_empty_prior(N)
         for i in eachindex(N.priors)
             if ismissing(N.priors[i])
-                d = AllCell(unfold(rand(NN.dna_stack.den_dna_samples), N.possition + sample(get_random_possition(N.den_and_ap_init_range)), NN.global_stdv))
-                rectify_possition!(d.cell, NN.size)
+                d = AllCell(unfold(rand(NN.dna_stack.den_dna_samples), N.position + get_random_position(N.den_and_ap_init_range), NN))
+                d.cell.position = rectify_position(d.cell.position, NN.size)
 
                 N.priors[i] = d
                 append!(NN.components, [d])
@@ -263,8 +257,8 @@ function add_axon_point!(NN::Network, N::Neuron)
     if has_empty_post(N)
         for i in eachindex(N.posteriors)
             if ismissing(N.posteriors[i])
-                ap = AllCell(unfold(rand(NN.dna_stack.ap_dna_samples), N.possition + get_random_possition(N.den_and_ap_init_range)), NN.global_stdv))
-                rectify_possition!(ap.cell, NN.size)
+                ap = AllCell(unfold(rand(NN.dna_stack.ap_dna_samples), N.position + get_random_position(N.den_and_ap_init_range), NN))
+                ap.cell.position = rectify_position(ap.cell.position, NN.size)
 
                 N.posteriors[i] = ap
                 append!(NN.components, [ap])
@@ -275,14 +269,14 @@ function add_axon_point!(NN::Network, N::Neuron)
 end
 function runtime_instantiate_components!(NN::Network, iteration::Integer) # instantiate neurons, dendrites and ap's depending on iteration
     for n in get_all_neurons(NN)
-        if n.den_init_interval % iteration == 0
+        if iteration % n.den_init_interval == 0
             add_dendrite!(NN, n)
         end
-        if n.ap_init_interval % iteration == 0
+        if iteration % n.ap_init_interval == 0
             add_axon_point!(NN, n)
         end
     end
-    if NN.neuron_init_interval % iteration == 0
+    if iteration % NN.neuron_init_interval == 0
         add_neuron!(NN)
     end
 end
@@ -314,16 +308,11 @@ end
 
 
 # VERIFICATION FUNCTIONS
-function rectify_possition!(c, nn_size::FloatN)
-    if distance(c.possition, Possition(0,0,0)) > nn_size
-        c.possition = Possition((normalize(c.possition) * nn_size)...)
-    end
-end
 function clean_network_components!(NN::Network)
     NN.components = collect(skipmissing(NN.components))
 
-    # println("implement - keep possition in network, behaviour")
-    # println("implement - keep possition max range, behaviour")
+    # println("implement - keep position in network, behaviour")
+    # println("implement - keep position max range, behaviour")
 
     for n1 in eachindex(NN.components)
 
@@ -336,14 +325,14 @@ function clean_network_components!(NN::Network)
             end
 
             if !ismissing(NN.components[n1])
-                # update possition to be inside network
-                if vector_length(NN.components[n1].cell.possition) > NN.size
-                    NN.components[n1].cell.possition = Possition((normalize(NN.components[n1].cell.possition) .* NN.size)...)
+                # update position to be inside network
+                if vector_length(NN.components[n1].cell.position) > NN.size
+                    NN.components[n1].cell.position = Position((normalize(NN.components[n1].cell.position) .* NN.size)...)
                 end
-                # update possition to be inside max_range
+                # update position to be inside max_range
                 if typeof(NN.components[n1].cell) != Synaps
-                    if vector_length(NN.components[n1].cell.possition) > NN.components[n1].cell.max_length
-                        NN.components[n1].cell.possition = Possition((normalize(NN.components[n1].cell.possition) .* NN.components[n1].cell.max_length)...)
+                    if vector_length(NN.components[n1].cell.position) > NN.components[n1].cell.max_length
+                        NN.components[n1].cell.position = Position((normalize(NN.components[n1].cell.position) .* NN.components[n1].cell.max_length)...)
                     end
                 else #if typeof(NN.components[n1].cell) == Synaps
                     # remove duplicates in NN.components
@@ -372,7 +361,13 @@ function clean_network_components!(NN::Network)
     NN.components = collect(skipmissing(NN.components))
 end
 
-
+function rectify_position(p::Position, nn_size::FloatN)
+    if distance(p, Position(0,0,0)) > nn_size
+        return Position((normalize(p) * nn_size)...)
+    else
+        return p
+    end
+end
 function rectifyDNA!(dna::DendriteDNA, NN::Network)
     dna.lifeTime = clamp(dna.lifeTime, 1., NN.maxDendriteLifeTime)
     dna.max_length = max(1., dna.max_length)
@@ -384,10 +379,6 @@ end
 function rectifyDNA!(dna::NeuroTransmitterDNA, NN::Network)
     dna.init_strength = clamp(dna.init_strength, 0.5, NN.max_nt_strength) # 0.5 because everything below negates more than 50% of input
     dna.retain_percentage = clamp(dna.retain_percentage, 0, 1)
-
-    dna.dispersion_region.x = clamp(dna.dispersion_region.x, -NN.size, NN.size)
-    dna.dispersion_region.y = clamp(dna.dispersion_region.y, -NN.size, NN.size)
-    dna.dispersion_region.z = clamp(dna.dispersion_region.z, -NN.size, NN.size)
 end
 function rectifyDNA!(dna::SynapsDNA, NN::Network)
     dna.lifeTime = clamp(dna.lifeTime, 1., NN.maxSynapsLifeTime)

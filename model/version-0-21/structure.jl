@@ -1,16 +1,16 @@
 # GENERAL STRUCTURES
 FloatN = Float32
-mutable struct Possition
+mutable struct Position
     x::FloatN
     y::FloatN
     z::FloatN
 end
 # mutable struct Surge
-#     pos::Possition
+#     pos::Position
 #     strength::FloatN
 # end
 mutable struct Sink
-    possition::Possition
+    position::Position
     strength::FloatN
 end
 
@@ -27,7 +27,6 @@ mutable struct AxonPointDNA
 end
 mutable struct NeuroTransmitterDNA
     init_strength::FloatN # mean should be 1 for most "accurate" effect
-    dispersion_region::Possition
     retain_percentage::FloatN
 end
 mutable struct SynapsDNA
@@ -43,6 +42,10 @@ mutable struct NeuronDNA
     den_init_interval::FloatN
     ap_init_interval::FloatN
 end
+mutable struct NetworkDNA
+    ap_sink_force::FloatN
+    neuron_repel_force::FloatN
+end
 mutable struct DNAStack
     nt_dna_samples::Array{NeuroTransmitterDNA}
     ap_dna_samples::Array{AxonPointDNA}
@@ -50,26 +53,20 @@ mutable struct DNAStack
     syn_dna_samples::Array{SynapsDNA}
     n_dna_samples::Array{NeuronDNA}
 end
-mutable struct NetworkDNA
-    ap_sink_force::FloatN
-    neuron_repel_force::FloatN
-end
 
 
 # NETWORK STRUCTURES
 mutable struct InputNode
-    possition::Possition
+    position::Position
     value::FloatN
 end
 mutable struct OutputNode
-    possition::Possition
+    position::Position
     value::FloatN
 end
 mutable struct NeuroTransmitter # small possitive or small negative
     # change at t
     strength::FloatN
-    dispersion_region::Possition # range given by strength of activation leftover
-    range_scale::FloatN # how much the input is scaled to calculate the range
     retain_percentage::FloatN # how much of the old value is retained when influenced by new neuro transmitters
 end
 mutable struct Dendrite
@@ -78,7 +75,7 @@ mutable struct Dendrite
     lifeTime::FloatN
 
     # change at t
-    possition::Possition
+    position::Position
 end
 mutable struct AxonPoint
     # constants
@@ -86,7 +83,7 @@ mutable struct AxonPoint
     lifeTime::FloatN
 
     # change at t
-    possition::Possition
+    position::Position
 end
 mutable struct Synaps
     # constants
@@ -97,7 +94,7 @@ mutable struct Synaps
 
     # change at t
     Q::FloatN
-    possition::Possition
+    position::Position
     NT::NeuroTransmitter # NTs::Array{NeuroTransmitter}
     total_fitness::FloatN
 end
@@ -112,7 +109,7 @@ mutable struct Neuron
     den_and_ap_init_range::FloatN
 
     # change at t
-    possition::Possition
+    position::Position
     Q::FloatN
     lifeTime::FloatN
     priors::Array{Union{Missing, AllCell}, 1}
@@ -121,7 +118,7 @@ mutable struct Neuron
     total_fitness::FloatN
 end
 mutable struct Subnet # may be used for more update by predetermined references or for neurotransmitter dispersion
-    possition::Possition
+    position::Position
     range::FloatN
 end
 mutable struct Network
