@@ -147,4 +147,7 @@ mutable struct Network
     total_fitness::FloatN
     n_id_counter::Integer
     s_id_counter::Integer
+    n_counter::Integer
+    den_counter::Integer
+    ap_counter::Integer
 end

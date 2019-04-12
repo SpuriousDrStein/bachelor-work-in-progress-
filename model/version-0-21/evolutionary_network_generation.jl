@@ -2,61 +2,61 @@ import Flux
 import OpenAIGym
 import Random
 
-function init_network_generating_network(params::Dict)
-    nt_sample_output_size = params["DNA_SAMPLE_SIZE"] * 2
-    ap_sample_output_size = params["DNA_SAMPLE_SIZE"] * 2
-    den_sample_output_size = params["DNA_SAMPLE_SIZE"] * 2
-    syn_sample_output_size = params["DNA_SAMPLE_SIZE"] * 3
-    n_sample_output_size = params["DNA_SAMPLE_SIZE"] * 6
-    net_sample_output_size = 2
-
-    net_input_size = ap_sample_output_size + den_sample_output_size + nt_sample_output_size + syn_sample_output_size + n_sample_output_size + net_sample_output_size
-    net_latent_size = params["LATENT_SIZE"]
-    latent_activation = params["LATENT_ACTIVATION"]
-    encoder_hiddens = params["ENCODER_HIDDENS"]
-    decoder_hiddens = params["DECODER_HIDDENS"]
-
-
-    encoder_model = Flux.Chain(
-        Flux.Dense(net_input_size, encoder_hiddens[1]),
-        [Flux.Dense(encoder_hiddens[i-1], encoder_hiddens[i], Flux.relu) for i in 2:length(encoder_hiddens)]...,
-        Flux.Dense(encoder_hiddens[end], net_latent_size, latent_activation))
-
-    nt_model = Flux.Chain(
-        Flux.Dense(net_latent_size, decoder_hiddens[1], Flux.leakyrelu),
-        [Flux.Dense(decoder_hiddens[i-1], decoder_hiddens[i], Flux.leakyrelu) for i in 2:length(decoder_hiddens)]...,
-        Flux.Dense(decoder_hiddens[end], nt_sample_output_size, Flux.leakyrelu))
-
-    ap_model = Flux.Chain(
-        Flux.Dense(net_latent_size, decoder_hiddens[1], Flux.relu),
-        [Flux.Dense(decoder_hiddens[i-1], decoder_hiddens[i], Flux.relu) for i in 2:length(decoder_hiddens)]...,
-        Flux.Dense(decoder_hiddens[end], ap_sample_output_size, Flux.relu))
-
-    den_model = Flux.Chain(
-        Flux.Dense(net_latent_size, decoder_hiddens[1], Flux.relu),
-        [Flux.Dense(decoder_hiddens[i-1], decoder_hiddens[i], Flux.relu) for i in 2:length(decoder_hiddens)]...,
-        Flux.Dense(decoder_hiddens[end], den_sample_output_size, Flux.relu))
-
-    syn_model = Flux.Chain(
-        Flux.Dense(net_latent_size, decoder_hiddens[1], Flux.relu),
-        [Flux.Dense(decoder_hiddens[i-1], decoder_hiddens[i], Flux.relu) for i in 2:length(decoder_hiddens)]...,
-        Flux.Dense(decoder_hiddens[end], syn_sample_output_size, Flux.relu))
-
-    neuron_model = Flux.Chain(
-        Flux.Dense(net_latent_size, decoder_hiddens[1], Flux.relu),
-        [Flux.Dense(decoder_hiddens[i-1], decoder_hiddens[i], Flux.relu) for i in 2:length(decoder_hiddens)]...,
-        Flux.Dense(decoder_hiddens[end], n_sample_output_size, Flux.relu))
-
-    net_model = Flux.Chain(
-        Flux.Dense(net_latent_size, decoder_hiddens[1], Flux.relu),
-        [Flux.Dense(decoder_hiddens[i-1], decoder_hiddens[i], Flux.relu) for i in 2:length(decoder_hiddens)]...,
-        Flux.Dense(decoder_hiddens[end], net_sample_output_size, Flux.relu))
-
-    decoder_params = [Flux.params(net_model)..., Flux.params(neuron_model)..., Flux.params(syn_model)..., Flux.params(den_model)..., Flux.params(ap_model)..., Flux.params(nt_model)...]
-    encoder_params = [Flux.params(encoder_model)...]
-
-    return encoder_model, [nt_model, ap_model, den_model, syn_model, neuron_model, net_model], [encoder_params, decoder_params]
-end
+# function init_network_generating_network(params::Dict)
+#     nt_sample_output_size = params["DNA_SAMPLE_SIZE"] * 2
+#     ap_sample_output_size = params["DNA_SAMPLE_SIZE"] * 2
+#     den_sample_output_size = params["DNA_SAMPLE_SIZE"] * 2
+#     syn_sample_output_size = params["DNA_SAMPLE_SIZE"] * 3
+#     n_sample_output_size = params["DNA_SAMPLE_SIZE"] * 6
+#     net_sample_output_size = 2
+#
+#     net_input_size = ap_sample_output_size + den_sample_output_size + nt_sample_output_size + syn_sample_output_size + n_sample_output_size + net_sample_output_size
+#     net_latent_size = params["LATENT_SIZE"]
+#     latent_activation = params["LATENT_ACTIVATION"]
+#     encoder_hiddens = params["ENCODER_HIDDENS"]
+#     decoder_hiddens = params["DECODER_HIDDENS"]
+#
+#
+#     encoder_model = Flux.Chain(
+#         Flux.Dense(net_input_size, encoder_hiddens[1]),
+#         [Flux.Dense(encoder_hiddens[i-1], encoder_hiddens[i], Flux.relu) for i in 2:length(encoder_hiddens)]...,
+#         Flux.Dense(encoder_hiddens[end], net_latent_size, latent_activation))
+#
+#     nt_model = Flux.Chain(
+#         Flux.Dense(net_latent_size, decoder_hiddens[1], Flux.leakyrelu),
+#         [Flux.Dense(decoder_hiddens[i-1], decoder_hiddens[i], Flux.leakyrelu) for i in 2:length(decoder_hiddens)]...,
+#         Flux.Dense(decoder_hiddens[end], nt_sample_output_size, Flux.leakyrelu))
+#
+#     ap_model = Flux.Chain(
+#         Flux.Dense(net_latent_size, decoder_hiddens[1], Flux.relu),
+#         [Flux.Dense(decoder_hiddens[i-1], decoder_hiddens[i], Flux.relu) for i in 2:length(decoder_hiddens)]...,
+#         Flux.Dense(decoder_hiddens[end], ap_sample_output_size, Flux.relu))
+#
+#     den_model = Flux.Chain(
+#         Flux.Dense(net_latent_size, decoder_hiddens[1], Flux.relu),
+#         [Flux.Dense(decoder_hiddens[i-1], decoder_hiddens[i], Flux.relu) for i in 2:length(decoder_hiddens)]...,
+#         Flux.Dense(decoder_hiddens[end], den_sample_output_size, Flux.relu))
+#
+#     syn_model = Flux.Chain(
+#         Flux.Dense(net_latent_size, decoder_hiddens[1], Flux.relu),
+#         [Flux.Dense(decoder_hiddens[i-1], decoder_hiddens[i], Flux.relu) for i in 2:length(decoder_hiddens)]...,
+#         Flux.Dense(decoder_hiddens[end], syn_sample_output_size, Flux.relu))
+#
+#     neuron_model = Flux.Chain(
+#         Flux.Dense(net_latent_size, decoder_hiddens[1], Flux.relu),
+#         [Flux.Dense(decoder_hiddens[i-1], decoder_hiddens[i], Flux.relu) for i in 2:length(decoder_hiddens)]...,
+#         Flux.Dense(decoder_hiddens[end], n_sample_output_size, Flux.relu))
+#
+#     net_model = Flux.Chain(
+#         Flux.Dense(net_latent_size, decoder_hiddens[1], Flux.relu),
+#         [Flux.Dense(decoder_hiddens[i-1], decoder_hiddens[i], Flux.relu) for i in 2:length(decoder_hiddens)]...,
+#         Flux.Dense(decoder_hiddens[end], net_sample_output_size, Flux.relu))
+#
+#     decoder_params = [Flux.params(net_model)..., Flux.params(neuron_model)..., Flux.params(syn_model)..., Flux.params(den_model)..., Flux.params(ap_model)..., Flux.params(nt_model)...]
+#     encoder_params = [Flux.params(encoder_model)...]
+#
+#     return encoder_model, [nt_model, ap_model, den_model, syn_model, neuron_model, net_model], [encoder_params, decoder_params]
+# end
 
 
 # FUNCTIONS
@@ -102,33 +102,78 @@ function decode(z, nets, output_scale)
     return [nt_dna..., ap_dna..., den_dna..., syn_dna..., n_dna..., net_dna...] .* output_scale
 end
 
-function get_dna(x, params)
-    d = params["DNA_SAMPLE_SIZE"] # because shorter indexing
+# function get_dna(x, params)
+#     d = params["DNA_SAMPLE_SIZE"] # because shorter indexing
+#
+#     means = [Flux.Tracker.data(x[i]) for i in 1:length(x)]
+#
+#     nt_init_strs = [means[i] for i in 1:d]
+#     nt_retain_ps = [means[i] for i in (d)+1:(d*2)]
+#
+#     ap_max_l = [means[i] for i in (d*2)+1:(d*3)]
+#     ap_life = [means[i] for i in (d*3)+1:(d*4)]
+#
+#     den_max_l = [means[i] for i in (d*4)+1:(d*5)]
+#     den_life = [means[i] for i in (d*5)+1:(d*6)]
+#
+#     syn_thr = [means[i] for i in (d*6)+1:(d*7)]
+#     syn_Qd = [means[i] for i in (d*7)+1:(d*8)]
+#     syn_life = [means[i] for i in (d*8)+1:(d*9)]
+#
+#     n_max_pri = [means[i] for i in (d*9)+1:(d*10)]
+#     n_max_pos = [means[i] for i in (d*10)+1:(d*11)]
+#     n_life = [means[i] for i in (d*11)+1:(d*12)]
+#     n_init_r = [means[i] for i in (d*12)+1:(d*13)]
+#     n_den_init_int = [means[i] for i in (d*13)+1:(d*14)]
+#     n_ap_init_int = [means[i] for i in (d*14)+1:(d*15)]
+#
+#     ap_sink_f = means[d*15+1]
+#     nrf = means[d*15+2]
+#
+#     dna_stack = DNAStack([], [], [], [], [])
+#     for i in 1:d
+#         append!(dna_stack.nt_dna_samples, [NeuroTransmitterDNA(nt_init_strs[i], nt_retain_ps[i])])
+#         append!(dna_stack.ap_dna_samples, [AxonPointDNA(ap_max_l[i], ap_life[i])])
+#         append!(dna_stack.den_dna_samples, [DendriteDNA(den_max_l[i], den_life[i])])
+#         append!(dna_stack.syn_dna_samples, [SynapsDNA(syn_thr[i], syn_Qd[i], syn_life[i])])
+#         append!(dna_stack.n_dna_samples, [NeuronDNA(n_max_pri[i], n_max_pos[i], n_life[i], n_init_r[i], n_den_init_int[i], n_ap_init_int[i])])
+#     end
+#
+#     return NetworkDNA(ap_sink_f, nrf), dna_stack
+# end
 
-    means = [Flux.Tracker.data(x[i]) for i in 1:length(x)]
+function sample_from_set_scaled(x, p)
+    d = p["DNA_SAMPLE_SIZE"]
+    stdv = p["GLOBAL_STDV"]
 
-    nt_init_strs = [means[i] for i in 1:d]
-    nt_retain_ps = [means[i] for i in (d)+1:(d*2)]
+    nt_init_strs = [rand(Normal(x[i], stdv)) for i in 1:d]
+    nt_retain_ps = [rand(Normal(x[i], stdv)) for i in (d)+1:(d*2)]
 
-    ap_max_l = [means[i] for i in (d*2)+1:(d*3)]
-    ap_life = [means[i] for i in (d*3)+1:(d*4)]
+    ap_max_l = [rand(Normal(x[i], stdv * sqrt(p["NETWORK_SIZE"]))) for i in (d*2)+1:(d*3)]
+    ap_life = [rand(Normal(x[i], stdv * sqrt(p["MAX_AXONPOINT_LIFETIME"]))) for i in (d*3)+1:(d*4)]
 
-    den_max_l = [means[i] for i in (d*4)+1:(d*5)]
-    den_life = [means[i] for i in (d*5)+1:(d*6)]
+    den_max_l = [rand(Normal(x[i], stdv * sqrt(p["NETWORK_SIZE"]))) for i in (d*4)+1:(d*5)]
+    den_life = [rand(Normal(x[i], stdv * sqrt(p["MAX_DENDRITE_LIFETIME"]))) for i in (d*5)+1:(d*6)]
 
-    syn_thr = [means[i] for i in (d*6)+1:(d*7)]
-    syn_Qd = [means[i] for i in (d*7)+1:(d*8)]
-    syn_life = [means[i] for i in (d*8)+1:(d*9)]
+    syn_thr = [rand(Normal(x[i], stdv * sqrt(p["MAX_THRESHOLD"]))) for i in (d*6)+1:(d*7)]
+    syn_Qd = [rand(Normal(x[i], stdv)) for i in (d*7)+1:(d*8)]
+    syn_life = [rand(Normal(x[i], stdv * sqrt(p["MAX_SYNAPTIC_LIFETIME"]))) for i in (d*8)+1:(d*9)]
 
-    n_max_pri = [means[i] for i in (d*9)+1:(d*10)]
-    n_max_pos = [means[i] for i in (d*10)+1:(d*11)]
-    n_life = [means[i] for i in (d*11)+1:(d*12)]
-    n_init_r = [means[i] for i in (d*12)+1:(d*13)]
-    n_den_init_int = [means[i] for i in (d*13)+1:(d*14)]
-    n_ap_init_int = [means[i] for i in (d*14)+1:(d*15)]
+    n_max_pri = [rand(Normal(x[i], stdv * sqrt(50))) for i in (d*9)+1:(d*10)]
+    n_max_pos = [rand(Normal(x[i], stdv * sqrt(50))) for i in (d*10)+1:(d*11)]
+    n_life = [rand(Normal(x[i], stdv * sqrt(p["MAX_NEURON_LIFETIME"]))) for i in (d*11)+1:(d*12)]
+    n_init_r = [rand(Normal(x[i], stdv * sqrt(p["NETWORK_SIZE"]/2))) for i in (d*12)+1:(d*13)]
+    n_den_init_int = [rand(Normal(x[i] , stdv * sqrt(p["MIN_AP_DEN_INIT_INTERVAL"]+50))) for i in (d*13)+1:(d*14)]
+    n_ap_init_int = [rand(Normal(x[i] , stdv * sqrt(p["MIN_AP_DEN_INIT_INTERVAL"]+50))) for i in (d*14)+1:(d*15)]
 
-    ap_sink_f = means[d*15+1]
-    nrf = means[d*15+2]
+    ap_sink_f = rand(Normal(x[d*15+1], stdv * sqrt(p["AP_SINK_ATTRACTIVE_FORCE"]+2.5)))
+    nrf = rand(Normal(x[d*15+2], stdv))
+
+    x = [nt_init_strs..., nt_retain_ps..., ap_max_l...,
+        ap_life..., den_max_l..., den_life..., syn_thr...,
+        syn_Qd..., syn_life..., n_max_pri..., n_max_pos...,
+        n_life..., n_init_r..., n_den_init_int..., n_ap_init_int...,
+        ap_sink_f..., nrf...]
 
     dna_stack = DNAStack([], [], [], [], [])
     for i in 1:d
@@ -138,8 +183,95 @@ function get_dna(x, params)
         append!(dna_stack.syn_dna_samples, [SynapsDNA(syn_thr[i], syn_Qd[i], syn_life[i])])
         append!(dna_stack.n_dna_samples, [NeuronDNA(n_max_pri[i], n_max_pos[i], n_life[i], n_init_r[i], n_den_init_int[i], n_ap_init_int[i])])
     end
+    return NetworkDNA(ap_sink_f, nrf), dna_stack, x
+end
 
-    return NetworkDNA(ap_sink_f, nrf), dna_stack
+function sample_from_set_decay(x, p, j)
+    d = p["DNA_SAMPLE_SIZE"]
+    stdv = p["GLOBAL_STDV"]
+
+    nt_init_strs = [rand(Normal(x[i], stdv * 1/j)) for i in 1:d]
+    nt_retain_ps = [rand(Normal(x[i], stdv * 1/j)) for i in (d)+1:(d*2)]
+
+    ap_max_l = [rand(Normal(x[i], stdv * 1/j)) for i in (d*2)+1:(d*3)]
+    ap_life = [rand(Normal(x[i], stdv * 1/j)) for i in (d*3)+1:(d*4)]
+
+    den_max_l = [rand(Normal(x[i], stdv * 1/j)) for i in (d*4)+1:(d*5)]
+    den_life = [rand(Normal(x[i], stdv * 1/j)) for i in (d*5)+1:(d*6)]
+
+    syn_thr = [rand(Normal(x[i], stdv * 1/j)) for i in (d*6)+1:(d*7)]
+    syn_Qd = [rand(Normal(x[i], stdv * 1/j)) for i in (d*7)+1:(d*8)]
+    syn_life = [rand(Normal(x[i], stdv * 1/j)) for i in (d*8)+1:(d*9)]
+
+    n_max_pri = [rand(Normal(x[i], stdv * 1/j)) for i in (d*9)+1:(d*10)]
+    n_max_pos = [rand(Normal(x[i], stdv * 1/j)) for i in (d*10)+1:(d*11)]
+    n_life = [rand(Normal(x[i], stdv * 1/j)) for i in (d*11)+1:(d*12)]
+    n_init_r = [rand(Normal(x[i], stdv * 1/j)) for i in (d*12)+1:(d*13)]
+    n_den_init_int = [rand(Normal(x[i] , stdv * 1/j)) for i in (d*13)+1:(d*14)]
+    n_ap_init_int = [rand(Normal(x[i] , stdv * 1/j)) for i in (d*14)+1:(d*15)]
+
+    ap_sink_f = rand(Normal(x[d*15+1], stdv * 1/j))
+    nrf = rand(Normal(x[d*15+2], stdv * 1/j))
+
+    x = [nt_init_strs..., nt_retain_ps..., ap_max_l...,
+        ap_life..., den_max_l..., den_life..., syn_thr...,
+        syn_Qd..., syn_life..., n_max_pri..., n_max_pos...,
+        n_life..., n_init_r..., n_den_init_int..., n_ap_init_int...,
+        ap_sink_f..., nrf...]
+
+    dna_stack = DNAStack([], [], [], [], [])
+    for i in 1:d
+        append!(dna_stack.nt_dna_samples, [NeuroTransmitterDNA(nt_init_strs[i], nt_retain_ps[i])])
+        append!(dna_stack.ap_dna_samples, [AxonPointDNA(ap_max_l[i], ap_life[i])])
+        append!(dna_stack.den_dna_samples, [DendriteDNA(den_max_l[i], den_life[i])])
+        append!(dna_stack.syn_dna_samples, [SynapsDNA(syn_thr[i], syn_Qd[i], syn_life[i])])
+        append!(dna_stack.n_dna_samples, [NeuronDNA(n_max_pri[i], n_max_pos[i], n_life[i], n_init_r[i], n_den_init_int[i], n_ap_init_int[i])])
+    end
+    return NetworkDNA(ap_sink_f, nrf), dna_stack, x
+end
+
+function sample_from_set(x, p)
+    d = p["DNA_SAMPLE_SIZE"]
+    stdv = p["GLOBAL_STDV"]
+
+    nt_init_strs = [rand(Normal(x[i], stdv)) for i in 1:d]
+    nt_retain_ps = [rand(Normal(x[i], stdv)) for i in (d)+1:(d*2)]
+
+    ap_max_l = [rand(Normal(x[i], stdv)) for i in (d*2)+1:(d*3)]
+    ap_life = [rand(Normal(x[i], stdv)) for i in (d*3)+1:(d*4)]
+
+    den_max_l = [rand(Normal(x[i], stdv)) for i in (d*4)+1:(d*5)]
+    den_life = [rand(Normal(x[i], stdv)) for i in (d*5)+1:(d*6)]
+
+    syn_thr = [rand(Normal(x[i], stdv)) for i in (d*6)+1:(d*7)]
+    syn_Qd = [rand(Normal(x[i], stdv)) for i in (d*7)+1:(d*8)]
+    syn_life = [rand(Normal(x[i], stdv)) for i in (d*8)+1:(d*9)]
+
+    n_max_pri = [rand(Normal(x[i], stdv)) for i in (d*9)+1:(d*10)]
+    n_max_pos = [rand(Normal(x[i], stdv)) for i in (d*10)+1:(d*11)]
+    n_life = [rand(Normal(x[i], stdv)) for i in (d*11)+1:(d*12)]
+    n_init_r = [rand(Normal(x[i], stdv)) for i in (d*12)+1:(d*13)]
+    n_den_init_int = [rand(Normal(x[i] , stdv)) for i in (d*13)+1:(d*14)]
+    n_ap_init_int = [rand(Normal(x[i] , stdv)) for i in (d*14)+1:(d*15)]
+
+    ap_sink_f = rand(Normal(x[d*15+1], stdv))
+    nrf = rand(Normal(x[d*15+2], stdv))
+
+    x = [nt_init_strs..., nt_retain_ps..., ap_max_l...,
+        ap_life..., den_max_l..., den_life..., syn_thr...,
+        syn_Qd..., syn_life..., n_max_pri..., n_max_pos...,
+        n_life..., n_init_r..., n_den_init_int..., n_ap_init_int...,
+        ap_sink_f..., nrf...]
+
+    dna_stack = DNAStack([], [], [], [], [])
+    for i in 1:d
+        append!(dna_stack.nt_dna_samples, [NeuroTransmitterDNA(nt_init_strs[i], nt_retain_ps[i])])
+        append!(dna_stack.ap_dna_samples, [AxonPointDNA(ap_max_l[i], ap_life[i])])
+        append!(dna_stack.den_dna_samples, [DendriteDNA(den_max_l[i], den_life[i])])
+        append!(dna_stack.syn_dna_samples, [SynapsDNA(syn_thr[i], syn_Qd[i], syn_life[i])])
+        append!(dna_stack.n_dna_samples, [NeuronDNA(n_max_pri[i], n_max_pos[i], n_life[i], n_init_r[i], n_den_init_int[i], n_ap_init_int[i])])
+    end
+    return NetworkDNA(ap_sink_f, nrf), dna_stack, x
 end
 
 function get_random_set(p)
@@ -231,12 +363,18 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
     action_index = [i for i in 1:length(env.actions)]
     action_space = one(action_index * action_index')
 
-    encoder_model, decoders, model_params = init_network_generating_network(params)
-    z_rec_loss(x, z) = Flux.mse(encoder_model(x), z')
-    x_rec_loss(x, rx) = Flux.mse(decode(encoder_model(x), decoders, params["OUTPUT_SCALE"]), rx')
+    # encoder_model, decoders, model_params = init_network_generating_network(params)
+    # z_rec_loss(x, z) = Flux.mse(encoder_model(x), z')
+    # x_rec_loss(x, rx) = Flux.mse(decode(encoder_model(x), decoders, params["OUTPUT_SCALE"]), rx')
 
-    total_best_net = [-9999999, Flux.Tracker.data.(decode(rand(params["LATENT_SIZE"]), decoders, params["OUTPUT_SCALE"]))]
-    metrics = Dict([("rec_loss" => []), ("best_net_fitness" => []), [("net_$(n)_final_neurons" => []) for n in 1:parallel_networks]...])
+    total_best_net = [-9999999, get_random_set(params)[3]]
+    metrics = Dict(("best_net_fitness" => []),
+                    [("net_$(n)_final_neurons" => []) for n in 1:parallel_networks]...,
+                    [("net_$(n)_final_dens" => []) for n in 1:parallel_networks]...,
+                    [("net_$(n)_final_aps" => []) for n in 1:parallel_networks]...,
+                    [("net_$(n)_final_syns" => []) for n in 1:parallel_networks]...,
+                    [("net_$(n)_neuron_fitness" => []) for n in 1:parallel_networks]...,
+                    [("net_$(n)_synaps_fitness" => []) for n in 1:parallel_networks]...)
 
     for e in 1:net_episodes
         nets = []
@@ -245,24 +383,12 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
         println("episode: $e")
 
         for n in 1:parallel_networks
-            # every second iteration
-            # either: try reconstructing best net
-            # or: take random set of parameters
-            if e % 2 == 0
-                z = Flux.Tracker.data.(encoder_model(total_best_net[2]))
-                x = decode(z ,decoders ,params["OUTPUT_SCALE"])
-                append!(xs, [Flux.Tracker.data.(x)]);
-
-                net_dna, dna_stack = get_dna(x, params)
-                net = initialize(net_dna, dna_stack, params)
-            else
-                net_dna, dna_stack, x = get_random_set(params)
-                append!(xs, [Flux.Tracker.data.(x)]);
-                net = initialize(net_dna, dna_stack, params)
-            end
-
+            net_dna, dna_stack, x = sample_from_set_decay(total_best_net[2], params, e)
+            append!(xs, [Flux.Tracker.data.(x)])
+            net = initialize(net_dna, dna_stack, params)
 
             I = 1 # for counting iterations
+
             # training
             for ee in 1:env_episodes
                 s = OpenAIGym.reset!(env)
@@ -289,8 +415,20 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
                 end
             end
 
-            append!(metrics["net_$(n)_final_neurons"], [length(get_all_neurons(net))])
+
+            # println("net $n:")
+            # println("#neurons     -- $(length(get_all_neurons(net)))")
+            # println("#dendrites   -- $(length(get_dendrites(get_all_all_cells(net))))")
+            # println("#axon points -- $(length(get_axon_points(get_all_all_cells(net))))")
+            # println("#synapses    -- $(length(get_synapses(get_all_all_cells(net))))")
+
             append!(nets, [(net.total_fitness => copy(Flux.Tracker.data.(x)))])
+            append!(metrics["net_$(n)_final_neurons"], [length(get_all_neurons(net))])
+            append!(metrics["net_$(n)_final_dens"], [length(get_dendrites(get_all_all_cells(net)))])
+            append!(metrics["net_$(n)_final_aps"], [length(get_axon_points(get_all_all_cells(net)))])
+            append!(metrics["net_$(n)_final_syns"], [length(get_synapses(get_all_all_cells(net)))])
+            append!(metrics["net_$(n)_neuron_fitness"], [sum([n.total_fitness for n in get_all_neurons(net)])])
+            append!(metrics["net_$(n)_synaps_fitness"], [sum([s.total_fitness for s in get_synapses(get_all_all_cells(net))])])
         end
 
         current_best_net .= [sort(nets)[end][1], [n[2] for n in sort(nets)][end]]
@@ -301,77 +439,71 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
             total_best_net = current_best_net
         end
 
-        x_rec_train_set = [(Flux.Tracker.data.(xs[i]), Flux.Tracker.data.(xs[i])) for i in eachindex(xs)]
-        best_current_x_train_set = [(Flux.Tracker.data.(xs[i]), current_best_net[2]) for i in eachindex(xs)]
-        best_total_x_train_set = [(Flux.Tracker.data.(xs[i]), total_best_net[2]) for i in eachindex(xs)]
-
-
-        for t in Random.shuffle(best_current_x_train_set)
-            if !isnan(x_rec_loss(t...)) && !isinf(x_rec_loss(t...))
-                # println("trained on local best")
-                Flux.train!(x_rec_loss, model_params[2], [t], Flux.Descent(params["LEARNING_RATE"]))
-            end
-        end
-        for t in Random.shuffle(best_total_x_train_set)
-            if !isnan(x_rec_loss(t...)) && !isinf(x_rec_loss(t...))
-                Flux.train!(x_rec_loss, model_params[2], [t], Flux.Descent(params["LEARNING_RATE"]))
-            end
-        end
-
-        # only train on reconstruction if above min loss
-        test_rec_x = rand(length(xs[1])) .* params["OUTPUT_SCALE"]
-        if x_rec_loss(test_rec_x, test_rec_x)  > params["MIN_RECONSTRUCTION_LOSS"]
-            for t in Random.shuffle(x_rec_train_set)
-                if !isnan(x_rec_loss(t...))  && !isinf(x_rec_loss(t...))
-                    Flux.train!(x_rec_loss, [model_params[1]..., model_params[2]...], [t], Flux.Descent(params["LEARNING_RATE"]))
-                    Flux.train!(x_rec_loss, [model_params[1]..., model_params[2]...], [t], Flux.Descent(params["LEARNING_RATE"]))
-                end
-            end
-        end
-        println("reconstruction loss: ", Flux.Tracker.data(x_rec_loss(test_rec_x, test_rec_x)))
-        append!(metrics["rec_loss"], [Flux.Tracker.data(x_rec_loss(test_rec_x, test_rec_x))])
+        # x_rec_train_set = [(Flux.Tracker.data.(xs[i]), Flux.Tracker.data.(xs[i])) for i in eachindex(xs)]
+        # best_current_x_train_set = [(Flux.Tracker.data.(xs[i]), current_best_net[2]) for i in eachindex(xs)]
+        # best_total_x_train_set = [(Flux.Tracker.data.(xs[i]), total_best_net[2]) for i in eachindex(xs)]
+        #
+        #
+        # for t in Random.shuffle(best_current_x_train_set)
+        #     if !isnan(x_rec_loss(t...)) && !isinf(x_rec_loss(t...))
+        #         # println("trained on local best")
+        #         Flux.train!(x_rec_loss, model_params[2], [t], Flux.Descent(params["LEARNING_RATE"]))
+        #     end
+        # end
+        # for t in Random.shuffle(best_total_x_train_set)
+        #     if !isnan(x_rec_loss(t...)) && !isinf(x_rec_loss(t...))
+        #         Flux.train!(x_rec_loss, model_params[2], [t], Flux.Descent(params["LEARNING_RATE"]))
+        #     end
+        # end
+        #
+        # # only train on reconstruction if above min loss
+        # test_rec_x = rand(length(xs[1])) .* params["OUTPUT_SCALE"]
+        # if x_rec_loss(test_rec_x, test_rec_x)  > params["MIN_RECONSTRUCTION_LOSS"]
+        #     for t in Random.shuffle(x_rec_train_set)
+        #         if !isnan(x_rec_loss(t...))  && !isinf(x_rec_loss(t...))
+        #             Flux.train!(x_rec_loss, [model_params[1]..., model_params[2]...], [t], Flux.Descent(params["LEARNING_RATE"]))
+        #             Flux.train!(x_rec_loss, [model_params[1]..., model_params[2]...], [t], Flux.Descent(params["LEARNING_RATE"]))
+        #         end
+        #     end
+        # end
+        # println("reconstruction loss: ", Flux.Tracker.data(x_rec_loss(test_rec_x, test_rec_x)))
+        # append!(metrics["rec_loss"], [Flux.Tracker.data(x_rec_loss(test_rec_x, test_rec_x))])
     end
 
     return total_best_net, metrics
 end
 
 
-function unsupervised_testing(env_episodes::Integer, iterations::Integer, net_dna, env, env_version, params::Dict)
+function unsupervised_testing(env_episodes::Integer, iterations::Integer, net_dna, dna_stack, env, env_version, params::Dict)
     env = OpenAIGym.GymEnv(env, env_version)
     action_index = [i for i in 1:length(env.actions)]
     action_space = one(action_index * action_index')
+
+    net = initialize(net_dna, dna_stack, params)
     I = 1
+    for e in 1:env_episodes
+        s = OpenAIGym.reset!(env)
 
-    net_dna, stack = get_dna(net_dna, params["DNA_SAMPLE_SIZE"])
-    net = initialize(net_dna, stack, init_params)
+        reset_network_components!(net)
 
-    for e in 1:net_episodes
-        println("episode: $e")
+        for i in 1:iterations
+            den_sinks, ap_sinks = value_step!(net, Array(s) .+ .5) # + .5 to produce preferable non negative values
+            state_step!(net, den_sinks, ap_sinks)
+            clean_network_components!(net)
+            runtime_instantiate_components!(net, I)
+            I += 1
 
-        for ee in 1:env_episodes
-            s = OpenAIGym.reset!(env)
+            out = [on.value for on in get_output_nodes(net)]
+            a = action_space[argmax(out)]
 
-            reset_network_components!(net)
+            r, s = OpenAIGym.step!(env, a)
 
-            for i in 1:iterations
-                den_sinks, ap_sinks = value_step!(net, Array(s) .+ .5) # + .5 to produce preferable non negative values
-                state_step!(net, den_sinks, ap_sinks)
-                clean_network_components!(net)
-                runtime_instantiate_components!(net, I)
-                I += 1
+            net.total_fitness += r * i
 
-                out = [on.value for on in get_output_nodes(net)]
-                a = action_space[argmax(out)]
+            OpenAIGym.render(env)
 
-                _, s = OpenAIGym.step!(env, a)
-
-                # net.total_fitness += r
-
-                OpenAIGym.render(env)
-
-                # if env.done
-                #     break
-                # end
+            if env.done
+                break
             end
         end
     end

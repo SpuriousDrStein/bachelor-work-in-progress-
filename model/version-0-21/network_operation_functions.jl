@@ -19,7 +19,7 @@ function accm!(N::Neuron, all_synapses::Array, dispersion_collection::Dict, fitn
             N.Q = sum(input_v)
 
             # calculate new fitness values
-            N.total_fitness += length(input_syns) * 5
+            N.total_fitness += length(input_syns)
             N.total_fitness += sum(input_v)
             N.total_fitness *= fitness_decay
         else
@@ -91,7 +91,7 @@ function value_step!(NN::Network, input::Array)
             for s in get_synapses_in_all(network_all_cells)
                 if s.cell.Q >= s.cell.THR
                     s.cell.Q = 0.
-                    s.cell.total_fitness += 5
+                    s.cell.total_fitness += 1
                     s.cell.total_fitness *= NN.fitness_decay
                 else
                     updateQ!(s.cell)
@@ -235,6 +235,7 @@ end
 function add_neuron!(NN::Network)
     n = unfold(rand(NN.dna_stack.n_dna_samples), get_random_position(NN.size), NN)
     NN.n_id_counter += 1
+    NN.n_counter += 1
 
     append!(NN.components, [n])
     return n
@@ -248,6 +249,7 @@ function add_dendrite!(NN::Network, N::Neuron)
 
                 N.priors[i] = d
                 append!(NN.components, [d])
+                NN.den_counter += 1
                 return nothing
             end
         end
@@ -262,6 +264,7 @@ function add_axon_point!(NN::Network, N::Neuron)
 
                 N.posteriors[i] = ap
                 append!(NN.components, [ap])
+                NN.ap_counter += 1
                 return nothing
             end
         end

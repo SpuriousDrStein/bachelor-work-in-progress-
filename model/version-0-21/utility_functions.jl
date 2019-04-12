@@ -127,5 +127,5 @@ function unfold(dna::NetworkDNA,
                     sink_force, nrf, max_nt_strength,
                     max_threshold, fitness_decay, random_fluctuation_scale,
                     neuron_init_interval, min_ap_den_init_interval, dna_stack, [], [],
-                    life_decay, init_fitness, 0, 0)
+                    life_decay, init_fitness, 0, 0, 0, 0, 0)
 end
