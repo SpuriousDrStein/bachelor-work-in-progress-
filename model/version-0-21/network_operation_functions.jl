@@ -1,52 +1,75 @@
-function accm!(N::Neuron, all_synapses::Array, dispersion_collection::Dict)
-    N.Q = 0.
-
+function update_neuron!(N::Neuron, NN::Network, dispersion_collection::Dict)
     prior_all = get_prior_all_cells(N)
-    input_syns = get_synapses(prior_all)
+    input_syns = [s for s in get_synapses(prior_all) if s.Q >= s.THR]
+    input_nodes = get_input_nodes(prior_all)
 
     if input_syns != []
-        input_valid_syns = get_activatable_synapses(input_syns)
-        input_nodes = get_input_nodes(prior_all)
+        input_v = [[s.Q * s.NT.strength for s in input_syns]..., [i_n.value for i_n in input_nodes]...]
 
-        input_v = [[s.THR for s in input_valid_syns]..., [i_n.value for i_n in input_nodes]...]
+        N.Q = sum(input_v)
 
-        if input_v != []
-            N.Q = sum(input_v)
+        N.total_fitness += length(input_syns)
+        N.total_fitness += sum(input_v)
+        N.d_total_fitness = (N.d_total_fitness +  length(input_syns) + sum(input_v)) / 2
+        N.d_total_fitness /= 2
 
-            # calculate new fitness values
-            N.total_fitness += length(input_syns)
-            N.total_fitness += sum(input_v)
-            N.d_total_fitness = (N.d_total_fitness +  length(input_syns) + sum(input_v)) / 2
-        else
-            N.d_total_fitness /= 2
-        end
-
-        for is in input_valid_syns
-            for s in get_synapses(Subnet(is.position, (is.Q - is.THR)), all_synapses)
+        for is in input_syns
+            for s in get_synapses(Subnet(is.position, is.Q/NN.size), get_synapses(get_all_all_cells(NN)))
                 if s in keys(dispersion_collection)
                     dispersion_collection[s] = dispersion_collection[s] .+ (s.NT.strength, 1)
                 else
                     dispersion_collection[s] = (s.NT.strength, 1)
                 end
             end
-        end   # dict of: synaps => neurotransmitter change
+        end
+    else
+        N.Q = 0.
     end
 end
 
 function propergate!(N::Neuron, sink_list::Array)
     post_all = get_posterior_all_cells(N)
-    post_syns = get_synapses(post_all)
-    post_aps =  get_axon_points(post_all)
-    post_out = get_output_nodes(post_all)
 
-    for s in post_syns
-        s.Q += N.Q/length(post_all)
+    if N.Q >= N.THR
+        for a in get_posterior_all_cells
+            if typeof(a.cell) == Synaps
+                a.cell.Q += N.Q/length(post_all)
+            elseif: update synapses based on their activation state (I/O)
+                append!(sink_list, [Sink(ap.position, N.Q/length(post_all))])
+                append!(surge_list, [Surge(ap.position, N.Q/length(post_all))])
+            elseif
+                a.cell.value = N.Q/length(post_all)
+            end
+        end append sinks and surges for dendrite end connections
     end
-    for ap in post_aps
-        append!(sink_list, [Sink(ap.position, N.Q/length(post_all))])
+        #
+end
+
+function update_synaps!(syn::AllCell, nt_retain_percentage::FloatN, dispersion_collection)
+    if s.cell.Q >= s.cell.THR
+        s.cell.Q = 0.
+        s.cell.R = 0.001
+        s.cell.total_fitness += 54 p    # 5. propergates.cell.d_total_fitness = (s.cell.d_total_fitness + 5) / 2 for each activatable neurons
+    else
+        s.Q *= s.cell.R
+        s.R *= min(s.R * s.RRecovery, s.maxR)
+
+        s.cell.d_total_fitness /= 2
     end
-    for p_o in post_out
-        p_o.value = N.Q/length(post_all)
+
+
+    # change nt
+    dispersion_value, n = get(dispersion_collection, s.cell, (1, 1))
+    avg_NT_change = dispersion_value/n
+    s.cell.NT.strength = retain_percentage * s.cell.NT.strength + (1-retain_percentage) * avg_NT_change
+
+    # update syn-fitness
+    s.cell.total_fitness += ((avg_NT_change+s.cell.NT.strength)/2)/(abs(avg_NT_change-s.cell.NT.strength)+0.00001)
+
+    if s.cell.d_total_fitness <= s.cell.destruction_threshold
+        s.cell.lifeTime -= NN.heavy_life_decay
+    else
+        s.cell.lifeTime -= NN.light_life_decay
     end
 end
 
@@ -58,65 +81,52 @@ function value_step!(NN::Network, input::Array)
 
     dispersion_collection = Dict()
     den_sinks = []
+    den_surges = []
     ap_sinks = [Sink(o_n.cell.position, NN.ap_sink_attractive_force) for o_n in out_nodes if !(o_n in get_output_nodes(get_all_all_cells(NN)))]
+    ap_surges = []
 
-    # 1
-    for i in eachindex(in_nodes, input)
-        in_nodes[i].cell.value = input[i]
-        if !(in_nodes[i] in get_input_nodes(get_all_all_cells(NN)))
-            append!(den_sinks, [Sink(in_nodes[i].cell.position, in_nodes[i].cell.value)])
-        end
-    end
-
+    # if no neurons in network
     if get_all_neurons(NN) == []
-        # println("exit value step because no neurons exist")
         NN.total_fitness -= 10
         return [], []
     end
 
+
+    # 1: assign input nodes
+    for i in eachindex(in_nodes, input)
+        in_nodes[i].cell.value = input[i]
+        if in_nodes[i] in get_input_nodes(get_all_all_cells(NN)) # if the input is referenced by a component
+            append!(den_surges, [Surge(in_nodes[i].cell.position, in_nodes[i].cell.value)])
+        else
+            append!(den_sinks, [Sink(in_nodes[i].cell.position, in_nodes[i].cell.value)])
+        end
+    end
+
+
     if network_all_cells != []
         if get_synapses(network_all_cells) != []
-            # 2
+
+            # 2: update neuron Q
             for n_i in n_ind
-                accm!(NN.components[n_i], get_synapses(network_all_cells), dispersion_collection) #all_synapses::Array{Synaps}, dispersion_collection::Dict{Synaps, Pair{FloatN, Integer}}
+                update_neuron!(NN.components[n_i], NN, dispersion_collection) #all_synapses::Array{Synaps}, dispersion_collection::Dict{Synaps, Pair{FloatN, Integer}}
             end
 
-            # 3
-            # this puts the NT(t-1) and then calculates NT(t)
-            # this can be reversed
+            # 3: update synapses based on their activation state (I/O)
             for s in get_synapses_in_all(network_all_cells)
-                if s.cell.Q >= s.cell.THR
-                    s.cell.Q = 0.
-                    s.cell.total_fitness += 5
-                    s.cell.d_total_fitness = (s.cell.d_total_fitness + 5) / 2
-                else
-                    s.Q *= syn.QDecay
-                    s.Q *= syn.NT.strength
-                    s.cell.d_total_fitness /= 2
-                end
-
-                dispersion_value, n = get(dispersion_collection, s.cell, (1, 1))
-                avg_NT_change = dispersion_value/n
-
-                # change nt and update syn-fitness
-                s.cell.total_fitness += ((avg_NT_change+s.cell.NT.strength)/2)/(abs(avg_NT_change-s.cell.NT.strength)+0.00001)
-                s.cell.NT.strength = s.cell.NT.retain_percentage * s.cell.NT.strength + (1-s.cell.NT.retain_percentage) * avg_NT_change
-
-                if s.cell.d_total_fitness <= s.cell.destruction_threshold
-                    s.cell.lifeTime -= NN.life_decay * 5
-                else
-                    s.cell.lifeTime -= NN.life_decay
-                end
+                update_synaps!(s)
             end
         end
 
+        # append sinks and surges for dendrite end connections
         if get_dendrites_in_all(network_all_cells) != []
             for d in get_dendrites_in_all(network_all_cells)
                 append!(ap_sinks, [Sink(d.cell.position, NN.ap_sink_attractive_force)])
+                append!(den_surges, [Surge(d.cell.position, NN.den_surge_repulsive_force)])
             end
         end
     end
 
+    # 4 propergate for each activatable neurons
     for n_i in n_ind
         propergate!(NN.components[n_i], den_sinks)
 
@@ -129,6 +139,9 @@ function value_step!(NN::Network, input::Array)
 
     return den_sinks, ap_sinks
 end
+
+
+
 
 function state_step!(NN::Network, den_sinks, ap_sinks)
     # update spatial relation
@@ -185,7 +198,6 @@ function state_step!(NN::Network, den_sinks, ap_sinks)
                     nt = unfold(rand(NN.dna_stack.nt_dna_samples), NN)
 
                     fuse!(d, ap, unfold(rand(NN.dna_stack.syn_dna_samples), pos, nt, NN))
-                    NN.s_id_counter += 1
                 end
             end
             for o_n in get_output_nodes_in_all(NN)
@@ -240,7 +252,6 @@ function fuse!(network_node::AllCell, ac::AllCell)
 end
 function add_neuron!(NN::Network)
     n = unfold(rand(NN.dna_stack.n_dna_samples), get_random_position(NN.size), NN)
-    NN.n_id_counter += 1
     NN.n_counter += 1
 
     append!(NN.components, [n])
@@ -416,8 +427,4 @@ function rectifyDNA!(dna::DNAStack, NN::Network)
     for n_dna_s in dna.n_dna_samples
         rectifyDNA!(n_dna_s, NN)
     end
-end
-function rectifyDNA!(dna::NetworkDNA)
-    dna.ap_sink_force = max(0.1, dna.ap_sink_force)
-    dna.neuron_repel_force = max(0.01, dna.neuron_repel_force)
 end

@@ -6,10 +6,8 @@ import Distributions
 import StatsBase
 
 # FUNCTIONS
-function initialize(net_dna, dna_stack, params)
-    rectifyDNA!(net_dna)
-    nn = unfold(net_dna,
-                params["NETWORK_SIZE"],
+function initialize(dna_stack, params)
+    nn = initialize_network(params["NETWORK_SIZE"], # still missing
                 params["GLOBAL_STDV"],
                 params["MAX_NEURON_LIFETIME"],
                 params["MAX_SYNAPTIC_LIFETIME"],
@@ -83,7 +81,7 @@ function get_dna(x, params)
         append!(dna_stack.n_dna_samples, [NeuronDNA(n_max_pri[i], n_max_pos[i], n_life[i], n_init_r[i], n_den_init_int[i], n_ap_init_int[i])])
     end
 
-    return NetworkDNA(ap_sink_f, nrf), dna_stack
+    return dna_stack
 end
 
 function sample_from_set_scaled(x, p; scl=0.3)
@@ -129,7 +127,7 @@ function sample_from_set_scaled(x, p; scl=0.3)
         append!(dna_stack.syn_dna_samples, [SynapsDNA(syn_thr[i], syn_Qd[i], syn_life[i])])
         append!(dna_stack.n_dna_samples, [NeuronDNA(n_max_pri[i], n_max_pos[i], n_life[i], n_init_r[i], n_den_init_int[i], n_ap_init_int[i])])
     end
-    return NetworkDNA(ap_sink_f, nrf), dna_stack, x
+    return dna_stack, x
 end
 
 function sample_from_set_decay(x, p, j)
@@ -175,7 +173,7 @@ function sample_from_set_decay(x, p, j)
         append!(dna_stack.syn_dna_samples, [SynapsDNA(syn_thr[i], syn_Qd[i], syn_life[i])])
         append!(dna_stack.n_dna_samples, [NeuronDNA(n_max_pri[i], n_max_pos[i], n_life[i], n_init_r[i], n_den_init_int[i], n_ap_init_int[i])])
     end
-    return NetworkDNA(ap_sink_f, nrf), dna_stack, x
+    return dna_stack, x
 end
 
 function sample_from_set_scaled_decay(x, p, j; scl=0.3)
@@ -221,7 +219,7 @@ function sample_from_set_scaled_decay(x, p, j; scl=0.3)
         append!(dna_stack.syn_dna_samples, [SynapsDNA(syn_thr[i], syn_Qd[i], syn_life[i])])
         append!(dna_stack.n_dna_samples, [NeuronDNA(n_max_pri[i], n_max_pos[i], n_life[i], n_init_r[i], n_den_init_int[i], n_ap_init_int[i])])
     end
-    return NetworkDNA(ap_sink_f, nrf), dna_stack, x
+    return dna_stack, x
 end
 
 
@@ -266,7 +264,7 @@ function sample_from_set(x, p)
         append!(dna_stack.syn_dna_samples, [SynapsDNA(syn_thr[i], syn_Qd[i], syn_life[i])])
         append!(dna_stack.n_dna_samples, [NeuronDNA(n_max_pri[i], n_max_pos[i], n_life[i], n_init_r[i], n_den_init_int[i], n_ap_init_int[i])])
     end
-    return NetworkDNA(ap_sink_f, nrf), dna_stack, x
+    return dna_stack, x
 end
 
 function get_random_set(p)
@@ -309,7 +307,7 @@ function get_random_set(p)
         append!(dna_stack.syn_dna_samples, [SynapsDNA(syn_thr[i], syn_Qd[i], syn_life[i])])
         append!(dna_stack.n_dna_samples, [NeuronDNA(n_max_pri[i], n_max_pos[i], n_life[i], n_init_r[i], n_den_init_int[i], n_ap_init_int[i])])
     end
-    return NetworkDNA(ap_sink_f, nrf), dna_stack, x
+    return dna_stack, x
 end
 
 # function supervised_train(episodes, iterations, data_input, data_output)
@@ -375,7 +373,7 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
         for n in 1:parallel_networks
             net_distro = softmax([bn[1]/mean([i[1] for i in best_nets]) for bn in best_nets])
             net_params = Distributions.sample(Random.GLOBAL_RNG, best_nets, StatsBase.Weights(net_distro))[2]
-            net_dna, dna_stack, x = sample_from_set_scaled_decay(net_params, params, e)
+            dna_stack, x = sample_from_set_scaled_decay(net_params, params, e)
             append!(xs, [Flux.Tracker.data.(x)])
             net = initialize(net_dna, dna_stack, params)
 

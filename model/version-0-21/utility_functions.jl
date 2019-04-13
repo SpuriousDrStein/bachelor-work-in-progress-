@@ -102,8 +102,7 @@ function unfold(dna::NeuroTransmitterDNA, NN::Network)::NeuroTransmitter
 
     return NeuroTransmitter(str, retain_percentage)
 end
-function unfold(dna::NetworkDNA,
-                net_size::FloatN,
+function initialize_network(net_size::FloatN,
                 global_stdv::FloatN,
                 mNlife::FloatN,
                 mSlife::FloatN,
@@ -118,11 +117,10 @@ function unfold(dna::NetworkDNA,
                 min_ap_den_init_interval::Integer,
                 n_dest_thresh::FloatN,
                 s_dest_thresh::FloatN,
+                ap_sink_force::FloatN,
+                nrf::FloatN,
                 dna_stack;
                 init_fitness=0)
-
-    sink_force = sample(dna.ap_sink_force, global_stdv)
-    nrf = sample(dna.neuron_repel_force, global_stdv)
 
     return Network(net_size,
                     global_stdv,
@@ -131,7 +129,7 @@ function unfold(dna::NetworkDNA,
                     mDlife,
                     mAlife,
                     min_fuse_distance,
-                    sink_force,
+                    ap_sink_force,
                     nrf,
                     max_nt_strength,
                     max_threshold,
@@ -142,6 +140,6 @@ function unfold(dna::NetworkDNA,
                     [], [],
                     life_decay,
                     init_fitness,
-                    0, 0, 0, 0, 0,
+                    0, 0, 0,
                     n_dest_thresh, s_dest_thresh)
 end

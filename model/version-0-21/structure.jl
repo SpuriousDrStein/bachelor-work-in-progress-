@@ -5,10 +5,10 @@ mutable struct Position
     y::FloatN
     z::FloatN
 end
-# mutable struct Surge
-#     pos::Position
-#     strength::FloatN
-# end
+mutable struct Surge
+    pos::Position
+    strength::FloatN
+end
 mutable struct Sink
     position::Position
     strength::FloatN
@@ -31,20 +31,19 @@ mutable struct NeuroTransmitterDNA
 end
 mutable struct SynapsDNA
     THR::FloatN
-    QDecay::FloatN
+    R::FloatN
+    Rrecovery::FloatN
+    maxR::FloatN
     lifeTime::FloatN
 end
 mutable struct NeuronDNA
+    lifeTime::FloatN
+    THR::FloatN
     max_num_priors::FloatN
     max_num_posteriors::FloatN
-    lifeTime::FloatN
-    den_and_ap_init_range::FloatN
     den_init_interval::FloatN
     ap_init_interval::FloatN
-end
-mutable struct NetworkDNA
-    ap_sink_force::FloatN
-    neuron_repel_force::FloatN
+    den_and_ap_init_range::FloatN
 end
 mutable struct DNAStack
     nt_dna_samples::Array{NeuroTransmitterDNA}
@@ -65,9 +64,7 @@ mutable struct OutputNode
     value::FloatN
 end
 mutable struct NeuroTransmitter # small possitive or small negative
-    # change at t
     strength::FloatN
-    retain_percentage::FloatN # how much of the old value is retained when influenced by new neuro transmitters
 end
 mutable struct Dendrite
     # constants
@@ -87,15 +84,17 @@ mutable struct AxonPoint
 end
 mutable struct Synaps
     # constants
-    id::Integer
-    THR::FloatN
-    QDecay::FloatN
     lifeTime::FloatN
 
     # change at t
-    Q::FloatN
     position::Position
-    NT::NeuroTransmitter # NTs::Array{NeuroTransmitter}
+    NT::NeuroTransmitter
+    Q::FloatN
+    THR::FloatN
+    R::FloatN
+    RRecovery::FloatN # how quickly the value comes back up again
+    maxR::FloatN
+
     total_fitness::FloatN
     d_total_fitness::FloatN
     destruction_threshold::FloatN
@@ -105,18 +104,20 @@ mutable struct AllCell
 end
 mutable struct Neuron
     # constants
-    id::Integer
     den_init_interval::Integer
     ap_init_interval::Integer
     den_and_ap_init_range::FloatN
 
     # change at t
     position::Position
-    Q::FloatN
     lifeTime::FloatN
+    Q::FloatN
+    THR::FloatN
+    fitness::FloatN
+
     priors::Array{Union{Missing, AllCell}, 1}
     posteriors::Array{Union{Missing, AllCell}, 1}
-    fitness::FloatN
+
     total_fitness::FloatN
     d_total_fitness::FloatN
     destruction_threshold::FloatN
@@ -148,8 +149,6 @@ mutable struct Network
     IO_components::Array{Union{AllCell}, 1}
     life_decay::FloatN
     total_fitness::FloatN
-    n_id_counter::Integer
-    s_id_counter::Integer
     n_counter::Integer
     den_counter::Integer
     ap_counter::Integer

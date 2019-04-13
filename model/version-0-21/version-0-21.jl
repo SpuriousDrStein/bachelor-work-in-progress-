@@ -16,10 +16,12 @@ init_params =   Dict("NETWORK_SIZE"                 => FloatN(5),
                 "MAX_DENDRITE_LIFETIME"             => FloatN(1000),
                 "MAX_AXONPOINT_LIFETIME"            => FloatN(1000),
                 "MIN_FUSE_DISTANCE"                 => FloatN(0.2),
-                "AP_SINK_ATTRACTIVE_FORCE"          => FloatN(0.4), # force: AxonPoint's -> ap_sinks
+                "AP_SINK_ATTRACTIVE_FORCE"          => FloatN(0.4), # force:    AxonPoint's -> ap_sinks
+                "DEN_SURGE_REPULSIVE_FORCE"         => FloatN(0.08), # repulsive force of dendrites
                 "MAX_THRESHOLD"                     => FloatN(5),
                 "RANDOM_FLUCTUATION"                => FloatN(0.2),
-                "LIFE_DECAY"                        => FloatN(2.),
+                "LITE_LIFE_DECAY"                   => FloatN(2.),
+                "HEAVY_LIFE_DECAY"                  => FloatN(15.),
                 "NEURON_DESTRUCTION_THRESHOLD"      => FloatN(2.),
                 "SYNAPS_DESTRUCTION_THRESHOLD"      => FloatN(0.7),
                 "MAX_NT_STRENGTH"                   => FloatN(1.5),
@@ -31,7 +33,10 @@ init_params =   Dict("NETWORK_SIZE"                 => FloatN(5),
                 "DATA_INPUT_SIZE"                   => 4,
                 "DATA_OUTPUT_SIZE"                  => 2,
                 "DNA_SAMPLE_SIZE"                   => 3,
-                "TOP_BUFFER_LENGTH"                 => 5)
+                "TOP_BUFFER_LENGTH"                 => 5,
+                "NT_RETAIN_PERCENTAGE"              => FloatN(0.8),
+                "NEURON_REPEL_FORCE"                => FloatN(0.05))
+
                 # "LEARNING_RATE"                     => 0.02,
                 # "MIN_RECONSTRUCTION_LOSS"           => 10, # if above this threshold - do more reconstruction effort
                 # "OUTPUT_SCALE"                      => 1, # coefficient to scale output of dna prediction on to create a more truthfull reconstruction of the high variance space that is the networks parameters
