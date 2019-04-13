@@ -1,9 +1,4 @@
-function updateQ!(syn::Synaps)
-    syn.Q *= syn.QDecay
-    syn.Q *= syn.NT.strength
-end
-
-function accm!(N::Neuron, all_synapses::Array, dispersion_collection::Dict, fitness_decay)
+function accm!(N::Neuron, all_synapses::Array, dispersion_collection::Dict)
     N.Q = 0.
 
     prior_all = get_prior_all_cells(N)
@@ -21,10 +16,9 @@ function accm!(N::Neuron, all_synapses::Array, dispersion_collection::Dict, fitn
             # calculate new fitness values
             N.total_fitness += length(input_syns)
             N.total_fitness += sum(input_v)
-            N.total_fitness *= fitness_decay
+            N.d_total_fitness = (N.d_total_fitness +  length(input_syns) + sum(input_v)) / 2
         else
-            N.Q = 0.
-            N.total_fitness *= fitness_decay
+            N.d_total_fitness /= 2
         end
 
         for is in input_valid_syns
@@ -64,12 +58,14 @@ function value_step!(NN::Network, input::Array)
 
     dispersion_collection = Dict()
     den_sinks = []
-    ap_sinks = [Sink(o_n.cell.position, NN.ap_sink_attractive_force) for o_n in out_nodes] # array of ap sinks
+    ap_sinks = [Sink(o_n.cell.position, NN.ap_sink_attractive_force) for o_n in out_nodes if !(o_n in get_output_nodes(get_all_all_cells(NN)))]
 
     # 1
     for i in eachindex(in_nodes, input)
         in_nodes[i].cell.value = input[i]
-        append!(den_sinks, [Sink(in_nodes[i].cell.position, in_nodes[i].cell.value)])
+        if !(in_nodes[i] in get_input_nodes(get_all_all_cells(NN)))
+            append!(den_sinks, [Sink(in_nodes[i].cell.position, in_nodes[i].cell.value)])
+        end
     end
 
     if get_all_neurons(NN) == []
@@ -82,7 +78,7 @@ function value_step!(NN::Network, input::Array)
         if get_synapses(network_all_cells) != []
             # 2
             for n_i in n_ind
-                accm!(NN.components[n_i], get_synapses(network_all_cells), dispersion_collection, NN.fitness_decay) #all_synapses::Array{Synaps}, dispersion_collection::Dict{Synaps, Pair{FloatN, Integer}}
+                accm!(NN.components[n_i], get_synapses(network_all_cells), dispersion_collection) #all_synapses::Array{Synaps}, dispersion_collection::Dict{Synaps, Pair{FloatN, Integer}}
             end
 
             # 3
@@ -91,11 +87,12 @@ function value_step!(NN::Network, input::Array)
             for s in get_synapses_in_all(network_all_cells)
                 if s.cell.Q >= s.cell.THR
                     s.cell.Q = 0.
-                    s.cell.total_fitness += 1
-                    s.cell.total_fitness *= NN.fitness_decay
+                    s.cell.total_fitness += 5
+                    s.cell.d_total_fitness = (s.cell.d_total_fitness + 5) / 2
                 else
-                    updateQ!(s.cell)
-                    s.cell.total_fitness *= NN.fitness_decay
+                    s.Q *= syn.QDecay
+                    s.Q *= syn.NT.strength
+                    s.cell.d_total_fitness /= 2
                 end
 
                 dispersion_value, n = get(dispersion_collection, s.cell, (1, 1))
@@ -105,7 +102,11 @@ function value_step!(NN::Network, input::Array)
                 s.cell.total_fitness += ((avg_NT_change+s.cell.NT.strength)/2)/(abs(avg_NT_change-s.cell.NT.strength)+0.00001)
                 s.cell.NT.strength = s.cell.NT.retain_percentage * s.cell.NT.strength + (1-s.cell.NT.retain_percentage) * avg_NT_change
 
-                s.cell.lifeTime -= NN.life_decay
+                if s.cell.d_total_fitness <= s.cell.destruction_threshold
+                    s.cell.lifeTime -= NN.life_decay * 5
+                else
+                    s.cell.lifeTime -= NN.life_decay
+                end
             end
         end
 
@@ -118,7 +119,12 @@ function value_step!(NN::Network, input::Array)
 
     for n_i in n_ind
         propergate!(NN.components[n_i], den_sinks)
-        NN.components[n_i].lifeTime -= NN.life_decay
+
+        if NN.components[n_i].d_total_fitness <= NN.components[n_i].destruction_threshold
+            NN.components[n_i].lifeTime -= NN.life_decay * 5
+        else
+            NN.components[n_i].lifeTime -= NN.life_decay
+        end
     end
 
     return den_sinks, ap_sinks
@@ -314,11 +320,9 @@ end
 function clean_network_components!(NN::Network)
     NN.components = collect(skipmissing(NN.components))
 
-    # println("implement - keep position in network, behaviour")
-    # println("implement - keep position max range, behaviour")
-
     for n1 in eachindex(NN.components)
 
+        # lifetime test
         if typeof(NN.components[n1]) == AllCell && typeof(NN.components[n1].cell) != InputNode && typeof(NN.components[n1].cell) != OutputNode
             if NN.components[n1].cell.lifeTime <= 0
                 if typeof(NN.components[n1]) == Synaps

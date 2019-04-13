@@ -84,7 +84,7 @@ function unfold(dna::SynapsDNA, position::Position, NT::NeuroTransmitter, NN::Ne
     thr = clamp(sample(dna.THR, NN.global_stdv), 0.1, NN.max_threshold)
     lifetime = clamp(sample(dna.lifeTime, NN.global_stdv), 1., NN.maxSynapsLifeTime)
 
-    return Synaps(copy(NN.s_id_counter), thr, q_dec, lifetime, 0, position, NT, 0.)
+    return Synaps(copy(NN.s_id_counter), thr, q_dec, lifetime, 0, position, NT, 0., 0., NN.s_destruction_threshold)
 end
 function unfold(dna::NeuronDNA, pos::Position, NN::Network)::Neuron
     lifetime = clamp(sample(dna.lifeTime, NN.global_stdv), 1., NN.maxNeuronLifeTime)
@@ -94,7 +94,7 @@ function unfold(dna::NeuronDNA, pos::Position, NN::Network)::Neuron
     den_init_interval = round(max(sample(dna.den_init_interval, NN.global_stdv), NN.min_ap_den_init_interval))
     ap_init_interval = round(max(sample(dna.ap_init_interval, NN.global_stdv), NN.min_ap_den_init_interval))
 
-    return Neuron(copy(NN.n_id_counter), den_init_interval, ap_init_interval, den_and_ap_init_range, pos, 0., lifetime, [missing for _ in 1:num_priors], [missing for _ in 1:num_posteriors], 0., 0.)
+    return Neuron(copy(NN.n_id_counter), den_init_interval, ap_init_interval, den_and_ap_init_range, pos, 0., lifetime, [missing for _ in 1:num_priors], [missing for _ in 1:num_posteriors], 0., 0., 0., NN.n_destruction_threshold)
 end
 function unfold(dna::NeuroTransmitterDNA, NN::Network)::NeuroTransmitter
     str = clamp(sample(dna.init_strength, NN.global_stdv), 0.5, NN.max_nt_strength)
@@ -114,18 +114,34 @@ function unfold(dna::NetworkDNA,
                 max_nt_strength::FloatN,
                 max_threshold::FloatN,
                 random_fluctuation_scale::FloatN,
-                fitness_decay::FloatN,
                 neuron_init_interval::Integer,
                 min_ap_den_init_interval::Integer,
+                n_dest_thresh::FloatN,
+                s_dest_thresh::FloatN,
                 dna_stack;
                 init_fitness=0)
 
     sink_force = sample(dna.ap_sink_force, global_stdv)
     nrf = sample(dna.neuron_repel_force, global_stdv)
 
-    return Network(net_size, global_stdv, mNlife, mSlife, mDlife, mAlife, min_fuse_distance,
-                    sink_force, nrf, max_nt_strength,
-                    max_threshold, fitness_decay, random_fluctuation_scale,
-                    neuron_init_interval, min_ap_den_init_interval, dna_stack, [], [],
-                    life_decay, init_fitness, 0, 0, 0, 0, 0)
+    return Network(net_size,
+                    global_stdv,
+                    mNlife,
+                    mSlife,
+                    mDlife,
+                    mAlife,
+                    min_fuse_distance,
+                    sink_force,
+                    nrf,
+                    max_nt_strength,
+                    max_threshold,
+                    random_fluctuation_scale,
+                    neuron_init_interval,
+                    min_ap_den_init_interval,
+                    dna_stack,
+                    [], [],
+                    life_decay,
+                    init_fitness,
+                    0, 0, 0, 0, 0,
+                    n_dest_thresh, s_dest_thresh)
 end

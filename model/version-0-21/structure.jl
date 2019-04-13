@@ -97,6 +97,8 @@ mutable struct Synaps
     position::Position
     NT::NeuroTransmitter # NTs::Array{NeuroTransmitter}
     total_fitness::FloatN
+    d_total_fitness::FloatN
+    destruction_threshold::FloatN
 end
 mutable struct AllCell
     cell::Union{AxonPoint, Dendrite, Synaps, InputNode, OutputNode}
@@ -116,6 +118,8 @@ mutable struct Neuron
     posteriors::Array{Union{Missing, AllCell}, 1}
     fitness::FloatN
     total_fitness::FloatN
+    d_total_fitness::FloatN
+    destruction_threshold::FloatN
 end
 mutable struct Subnet # may be used for more update by predetermined references or for neurotransmitter dispersion
     position::Position
@@ -134,7 +138,6 @@ mutable struct Network
     neuron_repel_force::FloatN
     max_nt_strength::FloatN
     max_threshold::FloatN
-    fitness_decay::FloatN
     random_fluctuation_scale::FloatN
     neuron_init_interval::Integer
     min_ap_den_init_interval::Integer
@@ -150,4 +153,6 @@ mutable struct Network
     n_counter::Integer
     den_counter::Integer
     ap_counter::Integer
+    n_destruction_threshold::FloatN
+    s_destruction_threshold::FloatN
 end
