@@ -6,7 +6,7 @@ mutable struct Position
     z::FloatN
 end
 mutable struct Surge
-    pos::Position
+    position::Position
     strength::FloatN
 end
 mutable struct Sink
@@ -27,22 +27,20 @@ mutable struct AxonPointDNA
 end
 mutable struct NeuroTransmitterDNA
     init_strength::FloatN # mean should be 1 for most "accurate" effect
-    retain_percentage::FloatN
 end
 mutable struct SynapsDNA
     THR::FloatN
-    R::FloatN
-    Rrecovery::FloatN
+    r_rec::FloatN
     maxR::FloatN
     lifeTime::FloatN
 end
 mutable struct NeuronDNA
     lifeTime::FloatN
     THR::FloatN
-    max_num_priors::FloatN
-    max_num_posteriors::FloatN
-    den_init_interval::FloatN
-    ap_init_interval::FloatN
+    max_num_priors::Integer
+    max_num_posteriors::Integer
+    den_init_interval::Integer
+    ap_init_interval::Integer
     den_and_ap_init_range::FloatN
 end
 mutable struct DNAStack
@@ -113,7 +111,6 @@ mutable struct Neuron
     lifeTime::FloatN
     Q::FloatN
     THR::FloatN
-    fitness::FloatN
 
     priors::Array{Union{Missing, AllCell}, 1}
     posteriors::Array{Union{Missing, AllCell}, 1}
@@ -136,10 +133,15 @@ mutable struct Network
     maxAxonPointLifeTime::FloatN
     minFuseDistance::FloatN
     ap_sink_attractive_force::FloatN # force: AxonPoint's -> ap_sinks
+    ap_surge_repulsive_force::FloatN
+    den_surge_repulsive_force::FloatN
     neuron_repel_force::FloatN
     max_nt_strength::FloatN
-    max_threshold::FloatN
+    max_n_threshold::FloatN
+    max_s_threshold::FloatN
     random_fluctuation_scale::FloatN
+    light_life_decay::FloatN
+    heavy_life_decay::FloatN
     neuron_init_interval::Integer
     min_ap_den_init_interval::Integer
     dna_stack::DNAStack
@@ -147,7 +149,6 @@ mutable struct Network
     # change at t
     components::Array{Union{Missing, AllCell, Neuron}, 1}
     IO_components::Array{Union{AllCell}, 1}
-    life_decay::FloatN
     total_fitness::FloatN
     n_counter::Integer
     den_counter::Integer

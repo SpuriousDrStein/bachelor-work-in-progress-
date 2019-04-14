@@ -1,9 +1,6 @@
 # BASIC
-to_stdv(var::FloatN) = sqrt(var)
-is_activatable(syn::Synaps) = syn.Q >= syn.THR
 has_empty_prior(N::Neuron) = any([ismissing(p) for p in N.priors])
 has_empty_post(N::Neuron) = any([ismissing(p) for p in N.posteriors])
-
 
 # QUERY FUNCTIONS
 get_dendrites(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == Dendrite]
@@ -47,7 +44,6 @@ get_all_positions(NN::Network) = begin
 end
 
 
-
 # SPATIAL FUNCTIONS
 direction(from::Position, to::Position) = [to.x, to.y, to.z] .- [from.x, from.y, from.z]
 distance(p1::Position, p2::Position) = sqrt(sum(direction(p1,p2).^2))
@@ -56,70 +52,35 @@ vector_length(v::Vector) = sqrt(sum(v.^2))
 normalize(p::Position) = [p.x, p.y, p.z] ./ vector_length(p)
 normalize(v::Vector) = v ./ vector_length(v)
 
-
 function get_random_position(range)
     return Position(rand(Uniform(-range, range)), rand(Uniform(-range, range)), rand(Uniform(-range, range)))
 end
 
+
 # INITIALIZATION SAMPELING
-function sample(mean::FloatN, global_stdv::FloatN)
-    rand(Normal(mean, global_stdv))
-end
-
-# DNA GENERATOR FUNCTIONS
-function unfold(dna::DendriteDNA, position::Position, NN::Network)::Dendrite
-    max_length = max(1., sample(dna.max_length, NN.global_stdv))
-    lifetime = clamp(sample(dna.lifeTime, NN.global_stdv), 1., NN.maxDendriteLifeTime)
-
-    return Dendrite(max_length, lifetime, position)
-end
-function unfold(dna::AxonPointDNA, position::Position, NN::Network)::AxonPoint
-    max_length = max(1., sample(dna.max_length, NN.global_stdv))
-    lifetime = clamp(sample(dna.lifeTime, NN.global_stdv), 1., NN.maxAxonPointLifeTime)
-
-    return AxonPoint(max_length, lifetime, position)
-end
-function unfold(dna::SynapsDNA, position::Position, NT::NeuroTransmitter, NN::Network)::Synaps
-    q_dec = clamp(sample(dna.QDecay, NN.global_stdv), 0.1, 0.99)
-    thr = clamp(sample(dna.THR, NN.global_stdv), 0.1, NN.max_threshold)
-    lifetime = clamp(sample(dna.lifeTime, NN.global_stdv), 1., NN.maxSynapsLifeTime)
-
-    return Synaps(copy(NN.s_id_counter), thr, q_dec, lifetime, 0, position, NT, 0., 0., NN.s_destruction_threshold)
-end
-function unfold(dna::NeuronDNA, pos::Position, NN::Network)::Neuron
-    lifetime = clamp(sample(dna.lifeTime, NN.global_stdv), 1., NN.maxNeuronLifeTime)
-    num_priors = round(max(1, sample(dna.max_num_priors, NN.global_stdv)))
-    num_posteriors = round(max(1, sample(dna.max_num_posteriors, NN.global_stdv)))
-    den_and_ap_init_range = max(1., sample(dna.den_and_ap_init_range, NN.global_stdv))
-    den_init_interval = round(max(sample(dna.den_init_interval, NN.global_stdv), NN.min_ap_den_init_interval))
-    ap_init_interval = round(max(sample(dna.ap_init_interval, NN.global_stdv), NN.min_ap_den_init_interval))
-
-    return Neuron(copy(NN.n_id_counter), den_init_interval, ap_init_interval, den_and_ap_init_range, pos, 0., lifetime, [missing for _ in 1:num_priors], [missing for _ in 1:num_posteriors], 0., 0., 0., NN.n_destruction_threshold)
-end
-function unfold(dna::NeuroTransmitterDNA, NN::Network)::NeuroTransmitter
-    str = clamp(sample(dna.init_strength, NN.global_stdv), 0.5, NN.max_nt_strength)
-    retain_percentage = clamp(sample(dna.retain_percentage, NN.global_stdv), 0, 0.5) # 0.5 -> there should be minimum loss of own value for nt interations
-
-    return NeuroTransmitter(str, retain_percentage)
-end
-function initialize_network(net_size::FloatN,
+function initialize_network(
+                net_size::FloatN,
                 global_stdv::FloatN,
                 mNlife::FloatN,
                 mSlife::FloatN,
                 mDlife::FloatN,
                 mAlife::FloatN,
                 min_fuse_distance::FloatN,
-                life_decay::FloatN,
+                ap_sink_attractive_force::FloatN,
+                ap_surge_repulsive_force::FloatN,
+                den_surge_repulsive_force::FloatN,
+                nrf::FloatN,
                 max_nt_strength::FloatN,
-                max_threshold::FloatN,
+                max_n_threshold::FloatN,
+                max_s_threshold::FloatN,
                 random_fluctuation_scale::FloatN,
+                light_life_decay::FloatN,
+                heavy_life_decay::FloatN,
                 neuron_init_interval::Integer,
                 min_ap_den_init_interval::Integer,
                 n_dest_thresh::FloatN,
                 s_dest_thresh::FloatN,
-                ap_sink_force::FloatN,
-                nrf::FloatN,
-                dna_stack;
+                component_stack::DNAStack,
                 init_fitness=0)
 
     return Network(net_size,
@@ -129,17 +90,72 @@ function initialize_network(net_size::FloatN,
                     mDlife,
                     mAlife,
                     min_fuse_distance,
-                    ap_sink_force,
+                    ap_sink_attractive_force,
+                    ap_surge_repulsive_force,
+                    den_surge_repulsive_force,
                     nrf,
                     max_nt_strength,
-                    max_threshold,
+                    max_n_threshold,
+                    max_s_threshold,
                     random_fluctuation_scale,
+                    light_life_decay,
+                    heavy_life_decay,
                     neuron_init_interval,
                     min_ap_den_init_interval,
-                    dna_stack,
+                    component_stack,
                     [], [],
-                    life_decay,
                     init_fitness,
                     0, 0, 0,
                     n_dest_thresh, s_dest_thresh)
+end
+
+
+function sample(mean::FloatN, global_stdv::FloatN)
+    rand(Normal(mean, global_stdv))
+end
+function rectify_position(p::Position, nn_size::FloatN)
+    if distance(p, Position(0,0,0)) > nn_size
+        return Position((normalize(p) * nn_size)...)
+    else
+        return p
+    end
+end
+function unfold(dna::DendriteDNA, position::Position, NN::Network)::Dendrite
+    max_length = max(1., dna.max_length)
+    lifetime = clamp(dna.lifeTime, 1., NN.maxDendriteLifeTime)
+
+    return Dendrite(max_length, lifetime, position)
+end
+function unfold(dna::AxonPointDNA, position::Position, NN::Network)::AxonPoint
+    max_length = max(1., dna.max_length, NN.global_stdv)
+    lifetime = clamp(dna.lifeTime, 1., NN.maxAxonPointLifeTime)
+
+    return AxonPoint(max_length, lifetime, position)
+end
+function unfold(dna::NeuroTransmitterDNA, NN::Network)::NeuroTransmitter
+    str = clamp(dna.init_strength, 0.1, NN.max_nt_strength)
+    return NeuroTransmitter(str)
+end
+function unfold(dna::SynapsDNA, pos::Position, NT::NeuroTransmitter, NN::Network)::Synaps
+    lifetime = clamp(dna.lifeTime, 1., NN.maxSynapsLifeTime)
+    thr = clamp(dna.THR, 0.5, NN.max_s_threshold)
+    r_rec = max(1.1, dna.r_rec) # 1.1 because at 1 it has to increase
+    maxR = max(1., dna.maxR)
+
+    return Synaps(lifetime, pos, NT, 0, thr, 1, r_rec, maxR, 0, 0, NN.s_destruction_threshold)
+end
+function unfold(dna::NeuronDNA, pos::Position, NN::Network)::Neuron
+    lifetime = clamp(dna.lifeTime, 1., NN.maxNeuronLifeTime)
+    den_init_interval = round(max(dna.den_init_interval, NN.min_ap_den_init_interval))
+    ap_init_interval = round(max(dna.ap_init_interval, NN.min_ap_den_init_interval))
+    den_and_ap_init_range = max(1., dna.den_and_ap_init_range)
+
+    max_num_priors = round(max(1, dna.max_num_priors))
+    max_num_posteriors = round(max(1, dna.max_num_posteriors))
+
+    thr = clamp(dna.THR, 0.5, NN.max_n_threshold)
+
+    return Neuron(den_init_interval, ap_init_interval, den_and_ap_init_range, pos, lifetime, 0., thr,
+                    [missing for _ in 1:max_num_priors], [missing for _ in 1:max_num_posteriors],
+                    0., 0., NN.n_destruction_threshold)
 end
