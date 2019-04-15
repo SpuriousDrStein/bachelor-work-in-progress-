@@ -142,6 +142,7 @@ mutable struct Network
     random_fluctuation_scale::FloatN
     light_life_decay::FloatN
     heavy_life_decay::FloatN
+    nt_retain_percentage::FloatN
     neuron_init_interval::Integer
     min_ap_den_init_interval::Integer
     dna_stack::DNAStack
@@ -151,6 +152,7 @@ mutable struct Network
     IO_components::Array{Union{AllCell}, 1}
     total_fitness::FloatN
     n_counter::Integer
+    syn_counter::Integer
     den_counter::Integer
     ap_counter::Integer
     n_destruction_threshold::FloatN

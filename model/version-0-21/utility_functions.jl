@@ -76,6 +76,7 @@ function initialize_network(
                 random_fluctuation_scale::FloatN,
                 light_life_decay::FloatN,
                 heavy_life_decay::FloatN,
+                nt_retain_percentage::FloatN,
                 neuron_init_interval::Integer,
                 min_ap_den_init_interval::Integer,
                 n_dest_thresh::FloatN,
@@ -100,12 +101,13 @@ function initialize_network(
                     random_fluctuation_scale,
                     light_life_decay,
                     heavy_life_decay,
+                    nt_retain_percentage,
                     neuron_init_interval,
                     min_ap_den_init_interval,
                     component_stack,
                     [], [],
                     init_fitness,
-                    0, 0, 0,
+                    0, 0, 0, 0,
                     n_dest_thresh, s_dest_thresh)
 end
 
