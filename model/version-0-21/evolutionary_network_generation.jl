@@ -8,7 +8,7 @@ import StatsBase
 # FUNCTIONS
 function initialize(dna_stack, params)
     nn = initialize_network(
-                params["NETWORK_SIZE"], # still missing
+                params["NETWORK_SIZE"],
                 params["GLOBAL_STDV"],
                 params["MAX_NEURON_LIFETIME"],
                 params["MAX_SYNAPTIC_LIFETIME"],
@@ -140,8 +140,8 @@ function get_random_set(p)
     n_thr  = [rand(Uniform(0.5, p["MAX_SYNAPTIC_THRESHOLD"])) for i in (d*10)+1:(d*11)]
     n_max_pri = [round(rand(Uniform(1, p["MAX_PRIORS"]))) for i in (d*11)+1:(d*12)]
     n_max_pos = [round(rand(Uniform(1, p["MAX_POSTERIORS"]))) for i in (d*12)+1:(d*13)]
-    n_den_init_int = [round(rand(Uniform(p["MIN_AP_DEN_INIT_INTERVAL"], p["NEURON_INIT_INTERVAL"]))) for i in (d*13)+1:(d*14)]
-    n_ap_init_int = [round(rand(Uniform(p["MIN_AP_DEN_INIT_INTERVAL"], p["NEURON_INIT_INTERVAL"]))) for i in (d*14)+1:(d*15)]
+    n_den_init_int = [round(rand(Uniform(p["MIN_AP_DEN_INIT_INTERVAL"], p["MAX_DENDRITE_LIFETIME"]))) for i in (d*13)+1:(d*14)]
+    n_ap_init_int = [round(rand(Uniform(p["MIN_AP_DEN_INIT_INTERVAL"], p["MAX_AXONPOINT_LIFETIME"]))) for i in (d*14)+1:(d*15)]
     n_ap_den_init_r = [rand(Uniform(1., p["NETWORK_SIZE"])) for i in (d*15)+1:(d*16)]
 
     xx = [nt_init_strs..., ap_max_l..., ap_life..., den_max_l..., den_life...,
@@ -177,6 +177,8 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
 
     best_nets = [[-99999999, get_random_set(params)[2]] for _ in 1:params["TOP_BUFFER_LENGTH"]]
 
+    params["GLOBAL_STDV"] = FloatN(10.)
+
     metrics = Dict([("net_$(n)_current_fitness" => []) for n in 1:parallel_networks]...,
                     [("net_$(n)_num_neurons" => []) for n in 1:parallel_networks]...,
                     [("net_$(n)_num_dens" => []) for n in 1:parallel_networks]...,
@@ -193,7 +195,7 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
         println("episode: $e")
 
         for n in 1:parallel_networks
-            if rand() > 0.5
+            if rand() > 0
                 net_distro = softmax([bn[1]/mean([i[1] for i in best_nets]) for bn in best_nets])
                 net_params = Distributions.sample(Random.GLOBAL_RNG, best_nets, StatsBase.Weights(net_distro))[2]
                 dna_stack, x = sample_from_set_plain(net_params, params)
@@ -216,20 +218,29 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
 
                 for i in 1:iterations
                     # for Acrobot
-                    state = [Array(s)[2] > 0, Array(s)[4] > 0]
+                    state = Array(s)
+                    state = [(s[2] > 0), (s[2] < 0), (s[4] > 0), (s[4] < 0)]  # [(s[2] > 0) * abs(s[2]), (s[2] < 0) * abs(s[2]), (s[4] > 0) * abs(s[4]), (s[4] < 0) * abs(s[4])]
 
                     den_sinks, den_surges, ap_sinks, ap_surges = value_step!(net, state)
+
+                    # println(get_all_neurons(net)[1].Q)
+
                     state_step!(net, den_sinks, den_surges, ap_sinks, ap_surges)
                     clean_network_components!(net)
                     runtime_instantiate_components!(net, I)
                     I += 1
+
 
                     out = [on.value for on in get_output_nodes(net)]
                     a = action_space[argmax(out)]
 
                     r, s = OpenAIGym.step!(env, a)
 
-                    net.total_fitness += r * i
+                    if r > 0
+                        net.total_fitness += r * i
+                    else
+                        net.total_fitness += r
+                    end
 
                     total_output .+= [o_n.value for o_n in get_output_nodes(net)]
 
@@ -238,15 +249,11 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
                     end
                 end
             end
-            # println("net $n:")
-            # println("#neurons     -- $(length(get_all_neurons(net)))")
-            # println("#dendrites   -- $(length(get_dendrites(get_all_all_cells(net))))")
-            # println("#axon points -- $(length(get_axon_points(get_all_all_cells(net))))")
-            # println("#synapses    -- $(length(get_synapses(get_all_all_cells(net))))")
-
-
-            tally_up_fitness!(net)
-            append!(nets, [(net.total_fitness => copy(x))])
+            println("net $n:")
+            println("#neurons     -- $(net.n_counter)")
+            println("#dendrites   -- $(net.den_counter)")
+            println("#axon points -- $(net.ap_counter)")
+            println("#synapses    -- $(net.syn_counter)")
 
             append!(metrics["net_$(n)_output_signals"], [total_output])
             append!(metrics["net_$(n)_num_neurons"], [net.n_counter])
@@ -254,12 +261,18 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
             append!(metrics["net_$(n)_num_aps"], [net.ap_counter])
             append!(metrics["net_$(n)_num_syns"], [net.syn_counter])
             append!(metrics["net_$(n)_neuron_fitness"], [sum([n.total_fitness for n in get_all_neurons(net)])])
-            if get_synapses(get_all_all_cells(net)) != []
+            if get_all_all_cells(net) != [] && get_synapses(get_all_all_cells(net)) != []
                 append!(metrics["net_$(n)_synaps_fitness"], [sum([s.total_fitness for s in get_synapses(get_all_all_cells(net))])])
             else
                 append!(metrics["net_$(n)_synaps_fitness"], [0])
             end
+
+
+            tally_up_fitness!(net)
+            append!(nets, [(net.total_fitness => copy(x))])
+
         end
+
 
         for cn in nets
             if cn[1] > sort(best_nets)[1][1]

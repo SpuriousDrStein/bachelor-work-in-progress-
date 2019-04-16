@@ -3,15 +3,13 @@ function update_neuron!(N::Neuron, NN::Network, dispersion_collection::Dict)
     input_syns = [s for s in get_synapses(prior_all) if s.Q >= s.THR]
     input_nodes = get_input_nodes(prior_all)
 
-    if input_syns != [] && input_nodes != []
-        input_v = [[s.Q * s.NT.strength for s in input_syns]..., [i_n.value for i_n in input_nodes]...]
+    if input_syns != [] || input_nodes != []
 
-        println("input_v: $input_v")
-        sleep(0.1)
+        input = sum([[i_n.value for i_n in input_nodes]..., [s.Q * s.NT.strength for s in input_syns]...])
 
-        N.Q = sum(input_v)
+        N.Q = input
 
-        N.d_total_fitness = (N.d_total_fitness + (length(input_syns) * 5) + sum(input_v)) / 2
+        N.d_total_fitness = (N.d_total_fitness + length(input_syns) + 1) / 2 # 1 for beeing activated
 
         for is in input_syns
             for s in get_synapses(Subnet(is.position, is.Q/NN.size), get_synapses(get_all_all_cells(NN)))
@@ -23,7 +21,6 @@ function update_neuron!(N::Neuron, NN::Network, dispersion_collection::Dict)
             end
         end
     else
-        N.Q = 0.
         N.d_total_fitness /= 2
     end
     N.total_fitness += N.d_total_fitness
@@ -58,12 +55,12 @@ function propergate!(N::Neuron, NN::Network, den_sinks::Array, ap_surges::Array)
     post_all = get_posterior_all_cells(N)
 
     if N.Q >= N.THR
-        for a in get_posterior_all_cells
+        for a in post_all
             if typeof(a.cell) == Synaps
                 a.cell.Q += N.Q/length(post_all)
             elseif typeof(a.cell) == AxonPoint
-                append!(den_sinks, [Sink(copy(ap.position), N.Q/length(post_all))])
-                append!(ap_surges, [Surge(copy(ap.position), NN.ap_surge_repulsive_force)])
+                append!(den_sinks, [Sink(copy(a.cell.position), N.Q/length(post_all))])
+                append!(ap_surges, [Surge(copy(a.cell.position), NN.ap_surge_repulsive_force)])
             elseif typeof(a.cell) == OutputNode
                 a.cell.value = N.Q/length(post_all)
                 append!(ap_surges, [Surge(copy(a.cell.position), NN.ap_surge_repulsive_force)])
@@ -71,7 +68,6 @@ function propergate!(N::Neuron, NN::Network, den_sinks::Array, ap_surges::Array)
         end
     else
         N.Q = 0.
-
 
         # THIS IS A TEST TO SEE IF RESETTING (WHEN FAILING TO ACTIVATE) THE NEURON IS VIABLE
     end
@@ -95,7 +91,7 @@ function value_step!(NN::Network, input::Array)
         return [], [], [], []
     end
 
-    # 1: assign input nodes, surges and sinks
+    # 1: assign input nodes, in/out surges and in/out sinks
     if network_all_cells != []
         for i in eachindex(in_nodes, input)
             in_nodes[i].cell.value = input[i]
