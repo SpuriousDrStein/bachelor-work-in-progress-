@@ -18,6 +18,8 @@ function initialize(dna_stack, params)
                 params["AP_SINK_ATTRACTIVE_FORCE"],
                 params["AP_SURGE_REPULSIVE_FORCE"],
                 params["DEN_SURGE_REPULSIVE_FORCE"],
+                params["INPUT_ATTRACTIVE_FORCE"],
+                params["OUTPUT_ATTRACTIVE_FORCE"],
                 params["NEURON_REPEL_FORCE"],
                 params["MAX_NT_STRENGTH"],
                 params["MAX_NEURON_THRESHOLD"],
@@ -46,7 +48,7 @@ get_nts_from_dna(dna, d) = [NeuroTransmitterDNA(dna[1:d][j]) for j in 1:d]
 get_aps_from_dna(dna, d) = [AxonPointDNA(dna[d+1:d*2][j], dna[d*2+1:d*3][j]) for j in 1:d]
 get_dens_from_dna(dna, d) = [DendriteDNA(dna[d*3+1:d*4][j], dna[d*4+1:d*5][j]) for j in 1:d]
 get_syns_from_dna(dna, d) = [SynapsDNA(dna[d*5+1:d*6][j], dna[d*6+1:d*7][j], dna[d*7+1:d*8][j], dna[d*8+1:d*9][j]) for j in 1:d]
-get_ns_from_dna(dna, d) = [SynapsDNA(dna[d*9+1:d*10][j], dna[d*10+1:d*11][j], dna[d*11+1:d*12][j], dna[d*12+1:d*13][j], dna[d*13+1:d*14][j], dna[d*14+1:d*15][j], dna[d*15+1:d*16][j]) for j in 1:d]
+get_ns_from_dna(dna, d) = [NeuronDNA(dna[d*9+1:d*10][j], dna[d*10+1:d*11][j], round(dna[d*11+1:d*12][j]), round(dna[d*12+1:d*13][j]), round(dna[d*13+1:d*14][j]), round(dna[d*14+1:d*15][j]), dna[d*15+1:d*16][j]) for j in 1:d]
 
 function get_dna(x, params)
     d = params["DNA_SAMPLE_SIZE"] # because shorter indexing
@@ -299,37 +301,50 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
 end
 
 
-function unsupervised_testing(env_episodes::Integer, iterations::Integer, net_dna, dna_stack, env, env_version, params::Dict)
+function unsupervised_test(sample, episodes::Integer, iterations::Integer, env, env_version, params::Dict, render)
     env = OpenAIGym.GymEnv(env, env_version)
     action_index = [i for i in 1:length(env.actions)]
     action_space = one(action_index * action_index')
 
-    net = initialize(net_dna, dna_stack, params)
-    I = 1
-    for e in 1:env_episodes
-        s = OpenAIGym.reset!(env)
+    dna_stack, _ = get_dna(sample, params)
+    net = initialize(dna_stack, params)
 
-        reset_network_components!(net)
+    I = 1 # for counting iterations
+    metrics = Dict()
+
+    for e in 1:episodes
+        s = OpenAIGym.reset!(env)
+        # reset_network_components!(net)
 
         for i in 1:iterations
-            den_sinks, ap_sinks = value_step!(net, Array(s) .+ .5) # + .5 to produce preferable non negative values
-            state_step!(net, den_sinks, ap_sinks)
+            # for Acrobot
+            state = Array(s)
+            state = [(s[2] > 0), (s[2] < 0), (s[4] > 0), (s[4] < 0)]  # [(s[2] > 0) * abs(s[2]), (s[2] < 0) * abs(s[2]), (s[4] > 0) * abs(s[4]), (s[4] < 0) * abs(s[4])]
+
+            den_sinks, den_surges, ap_sinks, ap_surges = value_step!(net, state)
+            state_step!(net, den_sinks, den_surges, ap_sinks, ap_surges)
             clean_network_components!(net)
             runtime_instantiate_components!(net, I)
             I += 1
 
+            positions = get_all_positions(net) # returns np, app, denp, synp, inp, outp
+            if "net_1_position_episode_$(e)" in keys(metrics)
+                append!(metrics["net_1_position_episode_$(e)"], [positions])
+            else
+                metrics["net_1_position_episode_$(e)"] = [positions]
+            end
+
             out = [on.value for on in get_output_nodes(net)]
             a = action_space[argmax(out)]
-
             r, s = OpenAIGym.step!(env, a)
 
-            net.total_fitness += r * i
-
-            OpenAIGym.render(env)
-
+            if render
+                OpenAIGym.render(env)
+            end
             if env.done
                 break
             end
         end
     end
+    return metrics
 end

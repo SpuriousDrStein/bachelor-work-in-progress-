@@ -136,6 +136,8 @@ mutable struct Network
     ap_sink_attractive_force::FloatN # force: AxonPoint's -> ap_sinks
     ap_surge_repulsive_force::FloatN
     den_surge_repulsive_force::FloatN
+    input_attraction_force::FloatN
+    output_attraction_force::FloatN
     neuron_repel_force::FloatN
     max_nt_strength::FloatN
     max_n_threshold::FloatN

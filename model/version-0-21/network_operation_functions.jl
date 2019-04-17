@@ -98,14 +98,14 @@ function value_step!(NN::Network, input::Array)
             if in_nodes[i].cell.referenced
                 append!(den_surges, [Surge(copy(in_nodes[i].cell.position), NN.den_surge_repulsive_force)])
             else
-                append!(den_sinks, [Sink(copy(in_nodes[i].cell.position), in_nodes[i].cell.value)])
+                append!(den_sinks, [Sink(copy(in_nodes[i].cell.position), NN.input_attraction_force)])
             end
         end
         for i in eachindex(out_nodes)
             if out_nodes[i].cell.referenced
                 append!(ap_surges, [Surge(copy(out_nodes[i].cell.position), NN.ap_surge_repulsive_force)])
             else
-                append!(ap_sinks, [Sink(copy(out_nodes[i].cell.position), NN.ap_sink_attractive_force)])
+                append!(ap_sinks, [Sink(copy(out_nodes[i].cell.position), NN.output_attraction_force)])
             end
         end
 
@@ -165,24 +165,13 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
                     dir = direction(i_nn.cell.position, d_sink.position)
 
                     if dir != [0,0]
-                        mag = NN.minFuseDistance
-                        if vector_length(dir) > NN.minFuseDistance # this is to avoid heavy overshooting
+                        if vector_length(dir) < NN.size/3
+                            mag = 0
+                        else
                             mag = NN.minFuseDistance / vector_length(dir)
                         end
 
                         total_v .+= normalize(dir) .* mag .* (1 + d_sink.strength)
-                    end
-                end
-                for d_surge in den_surges
-                    dir = direction(d_surge.position, i_nn.cell.position)
-
-                    if dir != [0,0]
-                        mag = NN.minFuseDistance
-                        if vector_length(dir) > NN.minFuseDistance
-                            mag /= vector_length(dir)
-                        end
-
-                        total_v .+= normalize(dir) .* mag .* (1 + d_surge.strength)
                     end
                 end
 
@@ -201,24 +190,13 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
                     dir = direction(o_nn.cell.position, d_sink.position)
 
                     if dir != [0,0]
-                        mag = NN.minFuseDistance
-                        if vector_length(dir) > NN.minFuseDistance # this is to avoid heavy overshooting
+                        if vector_length(dir) < NN.size/3
+                            mag = 0
+                        else
                             mag = NN.minFuseDistance / vector_length(dir)
                         end
 
                         total_v .+= normalize(dir) .* mag .* (1 + d_sink.strength)
-                    end
-                end
-                for d_surge in den_surges
-                    dir = direction(d_surge.position, o_nn.cell.position)
-
-                    if dir != [0,0]
-                        mag = NN.minFuseDistance
-                        if vector_length(dir) > NN.minFuseDistance
-                            mag /= vector_length(dir)
-                        end
-
-                        total_v .+= normalize(dir) .* mag .* (1 + d_surge.strength)
                     end
                 end
 
@@ -238,7 +216,7 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
                 if dir != [0,0]
                     mag = NN.minFuseDistance
                     if vector_length(dir) > NN.minFuseDistance # this is to avoid heavy overshooting
-                        mag = NN.minFuseDistance / vector_length(dir)
+                        mag /= vector_length(dir)
                     end
 
                     total_v .+= normalize(dir) .* mag .* (1 + d_sink.strength)
@@ -382,7 +360,7 @@ function add_dendrite!(NN::Network, N::Neuron)
     if has_empty_prior(N)
         for i in eachindex(N.priors)
             if ismissing(N.priors[i])
-                d = AllCell(unfold(rand(NN.dna_stack.den_dna_samples), N.position + get_random_position(N.den_and_ap_init_range), NN))
+                d = AllCell(unfold(rand(NN.dna_stack.den_dna_samples), N.position + abs(get_random_position(N.den_and_ap_init_range)), NN))
                 d.cell.position = rectify_position(d.cell.position, NN.size)
 
                 N.priors[i] = d
@@ -397,7 +375,7 @@ function add_axon_point!(NN::Network, N::Neuron)
     if has_empty_post(N)
         for i in eachindex(N.posteriors)
             if ismissing(N.posteriors[i])
-                ap = AllCell(unfold(rand(NN.dna_stack.ap_dna_samples), N.position + get_random_position(N.den_and_ap_init_range), NN))
+                ap = AllCell(unfold(rand(NN.dna_stack.ap_dna_samples), N.position - abs(get_random_position(N.den_and_ap_init_range)), NN))
                 ap.cell.position = rectify_position(ap.cell.position, NN.size)
 
                 N.posteriors[i] = ap
@@ -453,7 +431,6 @@ function clean_network_components!(NN::Network)
     NN.components = collect(skipmissing(NN.components))
 
     for n1 in eachindex(NN.components)
-
         # lifetime test
         if typeof(NN.components[n1]) == AllCell && typeof(NN.components[n1].cell) != InputNode && typeof(NN.components[n1].cell) != OutputNode
             if NN.components[n1].cell.lifeTime <= 0
@@ -508,11 +485,12 @@ function clean_network_components!(NN::Network)
                 end
                 NN.components[n1] = missing
             end
-        elseif typeof(NN.components[n1]) == InputNode || typeof(NN.components[n1]) == OutputNode
-            # update position to be inside network
-            if vector_length(NN.components[n1].cell.position) > NN.size
-                NN.components[n1].cell.position = Position((normalize(NN.components[n1].cell.position) .* NN.size)...)
-            end
+        end
+    end
+    for io_comp in NN.IO_components
+        # update position to be inside network
+        if vector_length(io_comp.cell.position) > NN.size
+            io_comp.cell.position = Position((normalize(io_comp.cell.position) .* NN.size)...)
         end
     end
     NN.components = collect(skipmissing(NN.components))
