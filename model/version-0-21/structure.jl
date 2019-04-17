@@ -3,7 +3,6 @@ FloatN = Float32
 mutable struct Position
     x::FloatN
     y::FloatN
-    z::FloatN
 end
 mutable struct Surge
     position::Position
@@ -56,10 +55,12 @@ end
 mutable struct InputNode
     position::Position
     value::FloatN
+    referenced::Bool
 end
 mutable struct OutputNode
     position::Position
     value::FloatN
+    referenced::Bool
 end
 mutable struct NeuroTransmitter # small possitive or small negative
     strength::FloatN

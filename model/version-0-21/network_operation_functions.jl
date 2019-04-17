@@ -95,14 +95,14 @@ function value_step!(NN::Network, input::Array)
     if network_all_cells != []
         for i in eachindex(in_nodes, input)
             in_nodes[i].cell.value = input[i]
-            if in_nodes[i] in get_input_nodes(get_all_all_cells(NN))
+            if in_nodes[i].cell.referenced
                 append!(den_surges, [Surge(copy(in_nodes[i].cell.position), NN.den_surge_repulsive_force)])
             else
                 append!(den_sinks, [Sink(copy(in_nodes[i].cell.position), in_nodes[i].cell.value)])
             end
         end
         for i in eachindex(out_nodes)
-            if out_nodes[i] in get_output_nodes(get_all_all_cells(NN))
+            if out_nodes[i].cell.referenced
                 append!(ap_surges, [Surge(copy(out_nodes[i].cell.position), NN.ap_surge_repulsive_force)])
             else
                 append!(ap_sinks, [Sink(copy(out_nodes[i].cell.position), NN.ap_sink_attractive_force)])
@@ -157,12 +157,85 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
     end
 
     if network_all_cells != []
+        # input node position update
+        for i_nn in get_input_nodes_in_all(NN)
+            if !i_nn.cell.referenced
+                total_v = [0.,0.]
+                for d_sink in den_sinks
+                    dir = direction(i_nn.cell.position, d_sink.position)
+
+                    if dir != [0,0]
+                        mag = NN.minFuseDistance
+                        if vector_length(dir) > NN.minFuseDistance # this is to avoid heavy overshooting
+                            mag = NN.minFuseDistance / vector_length(dir)
+                        end
+
+                        total_v .+= normalize(dir) .* mag .* (1 + d_sink.strength)
+                    end
+                end
+                for d_surge in den_surges
+                    dir = direction(d_surge.position, i_nn.cell.position)
+
+                    if dir != [0,0]
+                        mag = NN.minFuseDistance
+                        if vector_length(dir) > NN.minFuseDistance
+                            mag /= vector_length(dir)
+                        end
+
+                        total_v .+= normalize(dir) .* mag .* (1 + d_surge.strength)
+                    end
+                end
+
+                total_v ./= (length(den_sinks) + length(den_surges))
+                rand_v  = get_random_position(1) * NN.random_fluctuation_scale
+                i_nn.cell.position += rand_v
+                i_nn.cell.position += Position(total_v...)
+            end
+        end
+
+        # output node position update
+        for o_nn in get_output_nodes_in_all(NN)
+            if !o_nn.cell.referenced
+                total_v = [0.,0.]
+                for d_sink in den_sinks
+                    dir = direction(o_nn.cell.position, d_sink.position)
+
+                    if dir != [0,0]
+                        mag = NN.minFuseDistance
+                        if vector_length(dir) > NN.minFuseDistance # this is to avoid heavy overshooting
+                            mag = NN.minFuseDistance / vector_length(dir)
+                        end
+
+                        total_v .+= normalize(dir) .* mag .* (1 + d_sink.strength)
+                    end
+                end
+                for d_surge in den_surges
+                    dir = direction(d_surge.position, o_nn.cell.position)
+
+                    if dir != [0,0]
+                        mag = NN.minFuseDistance
+                        if vector_length(dir) > NN.minFuseDistance
+                            mag /= vector_length(dir)
+                        end
+
+                        total_v .+= normalize(dir) .* mag .* (1 + d_surge.strength)
+                    end
+                end
+
+                total_v ./= (length(den_sinks) + length(den_surges))
+                rand_v  = get_random_position(1) * NN.random_fluctuation_scale
+                o_nn.cell.position += rand_v
+                o_nn.cell.position += Position(total_v...)
+            end
+        end
+
+        # dendrite position update
         for den in get_dendrites_in_all(network_all_cells)
-            total_v = [0.,0.,0.]
+            total_v = [0.,0.]
             for d_sink in den_sinks
                 dir = direction(den.cell.position, d_sink.position)
 
-                if dir != [0,0,0]
+                if dir != [0,0]
                     mag = NN.minFuseDistance
                     if vector_length(dir) > NN.minFuseDistance # this is to avoid heavy overshooting
                         mag = NN.minFuseDistance / vector_length(dir)
@@ -174,7 +247,7 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
             for d_surge in den_surges
                 dir = direction(d_surge.position, den.cell.position)
 
-                if dir != [0,0,0]
+                if dir != [0,0]
                     mag = NN.minFuseDistance
                     if vector_length(dir) > NN.minFuseDistance
                         mag /= vector_length(dir)
@@ -191,19 +264,20 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
 
             den.cell.lifeTime -= NN.light_life_decay
 
-            for i_n in [inn for inn in get_input_nodes_in_all(NN) if !(inn in get_input_nodes(get_all_all_cells(NN)))]
-                if distance(den.cell.position, i_n.cell.position) <= NN.minFuseDistance
+            for i_n in get_input_nodes_in_all(NN)
+                if !i_n.cell.referenced && distance(den.cell.position, i_n.cell.position) <= NN.minFuseDistance
                     fuse!(i_n, den)
                 end
             end
         end
 
+        # axon point position update
         for ap in get_axon_points_in_all(network_all_cells)
-            total_v = [0.,0.,0.]
+            total_v = [0.,0.]
             for ap_sink in ap_sinks
                 dir = direction(ap.cell.position, ap_sink.position)
 
-                if dir != [0,0,0]
+                if dir != [0,0]
                     mag = NN.minFuseDistance
                     if vector_length(dir) > NN.minFuseDistance
                         mag /= vector_length(dir)
@@ -216,7 +290,7 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
             for ap_surge in ap_surges
                 dir = direction(ap_surge.position, ap.cell.position)
 
-                if dir != [0,0,0]
+                if dir != [0,0]
                     mag = NN.minFuseDistance
                     if vector_length(dir) > NN.minFuseDistance
                         mag /= vector_length(dir)
@@ -246,33 +320,34 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
                     NN.syn_counter += 1
                 end
             end
-            for o_n in [onn for onn in get_output_nodes_in_all(NN) if !(onn in get_output_nodes(get_all_all_cells(NN)))]
-                if distance(ap.cell.position, o_n.cell.position) <= NN.minFuseDistance
+            for o_n in get_output_nodes_in_all(NN)
+                if !o_n.cell.referenced && distance(ap.cell.position, o_n.cell.position) <= NN.minFuseDistance
                     fuse!(o_n, ap)
                 end
             end
         end
     end
 
+    # neuron position update
     # repel neurons away each other
-    if length(neurons) > 1
-        total_v = [[0.,0.,0.] for _ in 1:length(neurons)]
-        for i in eachindex(neurons)
-            local_v = [0.,0.,0.]
-
-            for n in neurons
-                if neurons[i] !== n
-                     local_v += direction(n.position, neurons[i].position)
-                end
-            end
-
-            total_v[i] = normalize(local_v) .* NN.neuron_repel_force #./ (length(neurons) .- 1)
-        end
-        for i in eachindex(total_v, neurons)
-            rand_v  = get_random_position(1) * NN.random_fluctuation_scale
-            neurons[i].position += Position(total_v[i]...) + rand_v
-        end
-    end
+    # if length(neurons) > 1
+    #     total_v = [[0.,0.] for _ in 1:length(neurons)]
+    #     for i in eachindex(neurons)
+    #         local_v = [0.,0.]
+    #
+    #         for n in neurons
+    #             if neurons[i] !== n
+    #                  local_v += direction(n.position, neurons[i].position)
+    #             end
+    #         end
+    #
+    #         total_v[i] = normalize(local_v) .* NN.neuron_repel_force #./ (length(neurons) .- 1)
+    #     end
+    #     for i in eachindex(total_v, neurons)
+    #         rand_v  = get_random_position(1) * NN.random_fluctuation_scale
+    #         neurons[i].position += Position(total_v[i]...) + rand_v
+    #     end
+    # end
 end
 
 # STRUCTURE GENERATION FUNCTIONS
@@ -293,10 +368,11 @@ function fuse!(network_node::AllCell, ac::AllCell)
         elseif typeof(ac.cell) == Dendrite
             ac.cell = network_node.cell
         end
+        network_node.cell.referenced = true
     end
 end
 function add_neuron!(NN::Network)
-    n = unfold(rand(NN.dna_stack.n_dna_samples), get_random_position(NN.size), NN)
+    n = unfold(rand(NN.dna_stack.n_dna_samples), get_random_position(NN.size/2), NN)
     NN.n_counter += 1
 
     append!(NN.components, [n])
@@ -370,21 +446,6 @@ function reset_network_components!(NN::Network)
         end
     end
 end
-function tally_up_fitness!(NN::Network)
-    for n in get_all_neurons(NN)
-        p_syns = get_synapses(get_prior_all_cells(n))
-        if p_syns != []
-            for s in p_syns
-                if s.Q >= s.THR
-                    s.total_fitness += 1
-                end
-                n.total_fitness += s.total_fitness
-            end
-        end
-        NN.total_fitness += n.total_fitness
-    end
-end
-
 
 
 # VERIFICATION FUNCTIONS
@@ -407,12 +468,12 @@ function clean_network_components!(NN::Network)
                 if vector_length(NN.components[n1].cell.position) > NN.size
                     NN.components[n1].cell.position = Position((normalize(NN.components[n1].cell.position) .* NN.size)...)
                 end
-                # update position to be inside max_range
+
                 if typeof(NN.components[n1].cell) != Synaps
+                    # update position to be inside max_range
                     if vector_length(NN.components[n1].cell.position) > NN.components[n1].cell.max_length
                         NN.components[n1].cell.position = Position((normalize(NN.components[n1].cell.position) .* NN.components[n1].cell.max_length)...)
                     end
-                else #if typeof(NN.components[n1].cell) == Synaps
 
                     # remove duplicates in NN.components
                     for n2 in eachindex(NN.components)
@@ -431,10 +492,27 @@ function clean_network_components!(NN::Network)
         elseif typeof(NN.components[n1]) == Neuron
             if NN.components[n1].lifeTime <= 0
                 NN.total_fitness += NN.components[n1].total_fitness
+                for pri in skipmissing(get_prior_all_cells(NN.components[n1]))
+                    if typeof(pri.cell) == InputNode
+                        pri.cell.referenced = false
+                    else
+                        pri = missing
+                    end
+                end
+                for post in skipmissing(get_posterior_all_cells(NN.components[n1]))
+                    if typeof(post.cell) == OutputNode
+                        post.cell.referenced = false
+                    else
+                        post = missing
+                    end
+                end
                 NN.components[n1] = missing
             end
         elseif typeof(NN.components[n1]) == InputNode || typeof(NN.components[n1]) == OutputNode
-            println("input or output registered in components")
+            # update position to be inside network
+            if vector_length(NN.components[n1].cell.position) > NN.size
+                NN.components[n1].cell.position = Position((normalize(NN.components[n1].cell.position) .* NN.size)...)
+            end
         end
     end
     NN.components = collect(skipmissing(NN.components))

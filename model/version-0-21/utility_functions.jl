@@ -32,28 +32,65 @@ get_dendrites(subnet::Subnet, den_collection::Array{Dendrite}) = [d for d in ski
 get_axon_points(subnet::Subnet, ap_collection::Array{AxonPoint}) = [ap for ap in skipmissing(ap_collection) if distance(ap.position, subnet.position) <= subnet.range]
 get_synapses(subnet::Subnet, syn_collection::Array{Synaps}) = [syn for syn in skipmissing(syn_collection) if distance(syn.position, subnet.position) <= subnet.range]
 
-get_all_positions(NN::Network) = begin
-    a = []
-    for c in skipmissing(NN.components)
-        if typeof(c) == Neuron
-            append!(a, c.position)
-        else
-            append!(a, c.cell.position)
+
+function tally_up_fitness!(NN::Network)
+    for n in get_all_neurons(NN)
+        p_syns = get_synapses(get_prior_all_cells(n))
+        if p_syns != []
+            for s in p_syns
+                if s.Q >= s.THR
+                    s.total_fitness += 1
+                end
+                n.total_fitness += s.total_fitness
+            end
         end
+        NN.total_fitness += n.total_fitness
     end
 end
 
 
 # SPATIAL FUNCTIONS
-direction(from::Position, to::Position) = [to.x, to.y, to.z] .- [from.x, from.y, from.z]
-distance(p1::Position, p2::Position) = sqrt(sum(direction(p1,p2).^2))
-vector_length(p::Position) = sqrt(sum([p.x, p.y, p.z].^2))
+direction(from::Position, to::Position) = [to.x, to.y] .- [from.x, from.y]
+distance(p1::Position, p2::Position) = sqrt(sum(direction(p1, p2).^2))
+vector_length(p::Position) = sqrt(sum([p.x, p.y].^2))
 vector_length(v::Vector) = sqrt(sum(v.^2))
-normalize(p::Position) = [p.x, p.y, p.z] ./ vector_length(p)
+normalize(p::Position) = [p.x, p.y] ./ vector_length(p)
 normalize(v::Vector) = v ./ vector_length(v)
 
 function get_random_position(range)
-    return Position(rand(Uniform(-range, range)), rand(Uniform(-range, range)), rand(Uniform(-range, range)))
+    return Position(rand(Uniform(-range, range)), rand(Uniform(-range, range)))
+end
+
+function get_all_positions(NN::Network)
+    np = []
+    app = []
+    denp = []
+    synp = []
+    inp = [i.cell.position for i in get_input_nodes_in_all(NN)]
+    outp = [o.cell.position for o in get_output_nodes_in_all(NN)]
+
+    all_all = get_all_all_cells(NN)
+    all_n = get_all_neurons(NN)
+
+    if all_n == []
+        return [], [], [], [], inp, outp
+    else
+        for n in all_n
+            append!(np, [n.position])
+        end
+        if all_all != []
+            for ac in all_all
+                if typeof(ac.cell) == Dendrite
+                    append!(denp, [ac.cell.position])
+                elseif typeof(ac.cell) == AxonPoint
+                    append!(app, [ac.cell.position])
+                elseif typeof(ac.cell) == Synaps
+                    append!(synp, [ac.cell.position])
+                end
+            end
+        end
+        return np, app, denp, synp, inp, outp
+    end
 end
 
 
@@ -116,7 +153,7 @@ function sample(mean::FloatN, global_stdv::FloatN)
     rand(Normal(mean, global_stdv))
 end
 function rectify_position(p::Position, nn_size::FloatN)
-    if distance(p, Position(0,0,0)) > nn_size
+    if distance(p, Position(0,0)) > nn_size
         return Position((normalize(p) * nn_size)...)
     else
         return p
