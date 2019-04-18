@@ -4,6 +4,7 @@ include("functions.jl")
 # NETWORK HP's
 init_params =   Dict("NETWORK_SIZE"                 => FloatN(6),
                 "GLOBAL_STDV"                       => FloatN(3),
+                "INIT_POSITION_STDV"                => FloatN(0.3),
                 "MAX_NEURON_LIFETIME"               => FloatN(5000),
                 "MAX_SYNAPTIC_LIFETIME"             => FloatN(3000),
                 "MAX_DENDRITE_LIFETIME"             => FloatN(1000),
@@ -16,7 +17,7 @@ init_params =   Dict("NETWORK_SIZE"                 => FloatN(6),
                 "OUTPUT_ATTRACTIVE_FORCE"           => FloatN(4),
                 "MAX_SYNAPTIC_THRESHOLD"            => FloatN(2),
                 "MAX_NEURON_THRESHOLD"              => FloatN(1),
-                "RANDOM_FLUCTUATION"                => FloatN(0.08),
+                "RANDOM_FLUCTUATION"                => FloatN(0),
                 "LITE_LIFE_DECAY"                   => FloatN(1.),
                 "HEAVY_LIFE_DECAY"                  => FloatN(3.),
                 "NEURON_DESTRUCTION_THRESHOLD"      => FloatN(0.1),
@@ -25,11 +26,11 @@ init_params =   Dict("NETWORK_SIZE"                 => FloatN(6),
                 "NT_RETAIN_PERCENTAGE"              => FloatN(0.5),
                 "NEURON_REPEL_FORCE"                => FloatN(0),
                 "MAX_MAX_RESISTANCE"                => FloatN(5.),
-                "INIT_NUM_NEURONS"                  => 1,
-                "MAX_PRIORS"                        => 10,
-                "MAX_POSTERIORS"                    => 6,
-                "NEURON_INIT_INTERVAL"              => 100,
-                "MIN_AP_DEN_INIT_INTERVAL"          => 5, # a minimum to negate the possibility of calling the add_dendrite or add_axon_point function every timestep
+                "INIT_NUM_NEURONS"                  => 4,
+                "INIT_PRIORS"                       => 3,
+                "INIT_POSTERIORS"                   => 5,
+                "NEURON_INIT_INTERVAL"              => 1000,
+                "MIN_AP_DEN_INIT_INTERVAL"          => 50, # a minimum to negate the possibility of calling the add_dendrite or add_axon_point function every timestep
                 "TOP_BUFFER_LENGTH"                 => 10,
                 "DNA_SAMPLE_SIZE"                   => 4,
                 "DATA_INPUT_SIZE"                   => 4,
@@ -44,9 +45,9 @@ env = :Acrobot
 v = :v1
 # Acrobot state = [cos(theta1) sin(theta1) cos(theta2) sin(theta2) thetaDot1 thetaDot2]
 
-best_dna, metrics = unsupervised_train(net_episodes, env_episodes, iterations, parallel_networks, env, v, init_params)
+best_dna, best_init_pos, metrics = unsupervised_train(net_episodes, env_episodes, iterations, parallel_networks, env, v, init_params)
 
-# display_network(metrics, 1, [net_episodes, net_episodes])
+display_network(metrics, 1, 10)
 
 met2 = unsupervised_test(maximum(best_dna)[2], 20, 30, env, v, init_params, false)
 

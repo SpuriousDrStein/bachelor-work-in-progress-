@@ -149,6 +149,7 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
     # update spatial relation
     network_all_cells = get_all_all_cells(NN)
     neurons = get_all_neurons(NN)
+    in_nodes = get_input_nodes_in_all(NN)
     out_nodes = get_output_nodes_in_all(NN)
 
     if get_all_neurons(NN) == []
@@ -158,24 +159,29 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
 
     if network_all_cells != []
         # input node position update
-        for i_nn in get_input_nodes_in_all(NN)
+        for i_nn in out_nodes
             if !i_nn.cell.referenced
                 total_v = [0.,0.]
-                for d_sink in den_sinks
-                    dir = direction(i_nn.cell.position, d_sink.position)
+                for ap_sink in ap_sinks
+                    dir = direction(i_nn.cell.position, ap_sink.position)
 
                     if dir != [0,0]
-                        if vector_length(dir) < NN.size/3
+                        if vector_length(dir) < NN.size/4
                             mag = 0
                         else
                             mag = NN.minFuseDistance / vector_length(dir)
                         end
 
-                        total_v .+= normalize(dir) .* mag .* (1 + d_sink.strength)
+                        total_v .+= normalize(dir) .* mag .* (1 + ap_sink.strength)
+                    end
+                end
+                for i_nn2 in in_nodes
+                    if i_nn2 !== i_nn
+                        total_v .+= min.(1 ./ direction(i_nn2.cell.position, i_nn.cell.position), [NN.size/4, NN.size/4])
                     end
                 end
 
-                total_v ./= (length(den_sinks) + length(den_surges))
+                total_v ./= (length(ap_sinks) + length(in_nodes) - 1)
                 rand_v  = get_random_position(1) * NN.random_fluctuation_scale
                 i_nn.cell.position += rand_v
                 i_nn.cell.position += Position(total_v...)
@@ -199,8 +205,13 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
                         total_v .+= normalize(dir) .* mag .* (1 + d_sink.strength)
                     end
                 end
+                for o_nn2 in get_output_nodes_in_all(NN)
+                    if o_nn2 !== o_nn
+                        total_v .+= min.(1 ./ direction(o_nn2.cell.position, o_nn.cell.position), [NN.size/4, NN.size/4])
+                    end
+                end
 
-                total_v ./= (length(den_sinks) + length(den_surges))
+                total_v ./= (length(den_sinks) + length(out_nodes) - 1)
                 rand_v  = get_random_position(1) * NN.random_fluctuation_scale
                 o_nn.cell.position += rand_v
                 o_nn.cell.position += Position(total_v...)
@@ -308,24 +319,24 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
 
     # neuron position update
     # repel neurons away each other
-    # if length(neurons) > 1
-    #     total_v = [[0.,0.] for _ in 1:length(neurons)]
-    #     for i in eachindex(neurons)
-    #         local_v = [0.,0.]
-    #
-    #         for n in neurons
-    #             if neurons[i] !== n
-    #                  local_v += direction(n.position, neurons[i].position)
-    #             end
-    #         end
-    #
-    #         total_v[i] = normalize(local_v) .* NN.neuron_repel_force #./ (length(neurons) .- 1)
-    #     end
-    #     for i in eachindex(total_v, neurons)
-    #         rand_v  = get_random_position(1) * NN.random_fluctuation_scale
-    #         neurons[i].position += Position(total_v[i]...) + rand_v
-    #     end
-    # end
+    if length(neurons) > 1
+        total_v = [[0.,0.] for _ in 1:length(neurons)]
+        for i in eachindex(neurons)
+            local_v = [0.,0.]
+
+            for n in neurons
+                if neurons[i] !== n
+                     local_v += direction(n.position, neurons[i].position)
+                end
+            end
+
+            total_v[i] = normalize(local_v) .* NN.neuron_repel_force #./ (length(neurons) .- 1)
+        end
+        for i in eachindex(total_v, neurons)
+            rand_v  = get_random_position(1) * NN.random_fluctuation_scale
+            neurons[i].position += Position(total_v[i]...) + rand_v
+        end
+    end
 end
 
 # STRUCTURE GENERATION FUNCTIONS
@@ -356,12 +367,33 @@ function add_neuron!(NN::Network)
     append!(NN.components, [n])
     return n
 end
+function add_neuron!(NN::Network, init_pos::Position)
+    n = unfold(rand(NN.dna_stack.n_dna_samples), init_pos, NN)
+    NN.n_counter += 1
+
+    append!(NN.components, [n])
+    return n
+end
 function add_dendrite!(NN::Network, N::Neuron)
     if has_empty_prior(N)
         for i in eachindex(N.priors)
             if ismissing(N.priors[i])
                 d = AllCell(unfold(rand(NN.dna_stack.den_dna_samples), N.position + abs(get_random_position(N.den_and_ap_init_range)), NN))
                 d.cell.position = rectify_position(d.cell.position, NN.size)
+
+                N.priors[i] = d
+                append!(NN.components, [d])
+                NN.den_counter += 1
+                return nothing
+            end
+        end
+    end
+end
+function add_dendrite!(NN::Network, N::Neuron, init_pos::Position)
+    if has_empty_prior(N)
+        for i in eachindex(N.priors)
+            if ismissing(N.priors[i])
+                d = AllCell(unfold(rand(NN.dna_stack.den_dna_samples), init_pos, NN))
 
                 N.priors[i] = d
                 append!(NN.components, [d])
@@ -386,6 +418,20 @@ function add_axon_point!(NN::Network, N::Neuron)
         end
     end
 end
+function add_axon_point!(NN::Network, N::Neuron, init_pos::Position)
+    if has_empty_post(N)
+        for i in eachindex(N.posteriors)
+            if ismissing(N.posteriors[i])
+                ap = AllCell(unfold(rand(NN.dna_stack.ap_dna_samples), init_pos, NN))
+
+                N.posteriors[i] = ap
+                append!(NN.components, [ap])
+                NN.ap_counter += 1
+                return nothing
+            end
+        end
+    end
+end
 function runtime_instantiate_components!(NN::Network, iteration::Integer) # instantiate neurons, dendrites and ap's depending on iteration
     for n in get_all_neurons(NN)
         if iteration % n.den_init_interval == 0
@@ -399,16 +445,16 @@ function runtime_instantiate_components!(NN::Network, iteration::Integer) # inst
         add_neuron!(NN)
     end
 end
-function populate_network!(NN::Network, num_neurons::Integer, max_num_priors::Integer, max_num_post::Integer)
-    for _ in 1:num_neurons
+function populate_network!(NN::Network, num_neurons::Integer, num_priors::Integer, num_post::Integer, init_pos)
+    for n in 1:num_priors+num_post:num_neurons*(num_priors+num_post)
         # add_neuron! adds it to component list as well
-        n = add_neuron!(NN)
+        cn = add_neuron!(NN, init_pos[n])
 
-        for _ in 1:rand(1:max_num_priors)
-            add_dendrite!(NN, n)
+        for i in 1:num_priors
+            add_dendrite!(NN, cn, init_pos[n+i])
         end
-        for _ in 1:rand(1:max_num_post)
-            add_axon_point!(NN, n)
+        for j in 1:num_post
+            add_axon_point!(NN, cn, init_pos[n+num_priors+j])
         end
     end
 end
