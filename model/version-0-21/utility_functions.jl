@@ -61,22 +61,29 @@ function get_random_position(range)
     return Position(rand(Uniform(-range, range)), rand(Uniform(-range, range)))
 end
 
-function get_all_positions(NN::Network)
+function get_all_relations(NN::Network)
     np = []
     app = []
     denp = []
     synp = []
     inp = [i.cell.position for i in get_input_nodes_in_all(NN)]
     outp = [o.cell.position for o in get_output_nodes_in_all(NN)]
+    cons = []
 
     all_all = get_all_all_cells(NN)
     all_n = get_all_neurons(NN)
 
     if all_n == []
-        return [], [], [], [], inp, outp
+        return [[], [], [], [], inp, outp], []
     else
         for n in all_n
             append!(np, [n.position])
+            for pr in skipmissing(get_prior_all_cells(n))
+                append!(cons, [[n.position + Position(direction(n.position, pr.cell.position)...), n.position]])
+            end
+            for po in skipmissing(get_posterior_all_cells(n))
+                append!(cons, [[n.position, n.position + Position(direction(n.position, po.cell.position)...)]])
+            end
         end
         if all_all != []
             for ac in all_all
@@ -89,7 +96,7 @@ function get_all_positions(NN::Network)
                 end
             end
         end
-        return np, app, denp, synp, inp, outp
+        return [np, app, denp, synp, inp, outp], cons
     end
 end
 
@@ -163,35 +170,21 @@ function rectify_position(p::Position, nn_size::FloatN)
         return p
     end
 end
-function unfold(dna::DendriteDNA, position::Position, NN::Network)::Dendrite
-    max_length = max(1., dna.max_length)
-    lifetime = clamp(dna.lifeTime, 1., NN.maxDendriteLifeTime)
-
-    return Dendrite(max_length, lifetime, position)
-end
-function unfold(dna::AxonPointDNA, position::Position, NN::Network)::AxonPoint
-    max_length = max(1., dna.max_length, NN.global_stdv)
-    lifetime = clamp(dna.lifeTime, 1., NN.maxAxonPointLifeTime)
-
-    return AxonPoint(max_length, lifetime, position)
-end
 function unfold(dna::NeuroTransmitterDNA, NN::Network)::NeuroTransmitter
     str = clamp(dna.init_strength, 0.1, NN.max_nt_strength)
     return NeuroTransmitter(str)
 end
 function unfold(dna::SynapsDNA, pos::Position, NT::NeuroTransmitter, NN::Network)::Synaps
-    lifetime = clamp(dna.lifeTime, 1., NN.maxSynapsLifeTime)
     thr = clamp(dna.THR, 0.5, NN.max_s_threshold)
     r_rec = max(1.1, dna.r_rec) # 1.1 because at 1 it has to increase
     maxR = max(1., dna.maxR)
 
-    return Synaps(lifetime, pos, NT, 0, thr, 1, r_rec, maxR, 0, 0, NN.s_destruction_threshold)
+    return Synaps(NN.synapsLifeTime, pos, NT, 0, thr, 1, r_rec, maxR, 0, 0, NN.s_destruction_threshold)
 end
 function unfold(dna::NeuronDNA, pos::Position, NN::Network)::Neuron
-    lifetime = clamp(dna.lifeTime, 1., NN.maxNeuronLifeTime)
-    den_init_interval = round(max(dna.den_init_interval, NN.min_ap_den_init_interval))
-    ap_init_interval = round(max(dna.ap_init_interval, NN.min_ap_den_init_interval))
-    den_and_ap_init_range = max(1., dna.den_and_ap_init_range)
+    lifetime = NN.neuronLifeTime
+    den_init_interval = NN.ap_den_init_interval
+    ap_init_interval = NN.ap_den_init_interval
 
     max_num_priors = round(max(1, dna.max_num_priors))
     max_num_posteriors = round(max(1, dna.max_num_posteriors))
@@ -201,4 +194,63 @@ function unfold(dna::NeuronDNA, pos::Position, NN::Network)::Neuron
     return Neuron(den_init_interval, ap_init_interval, den_and_ap_init_range, pos, lifetime, 0., thr,
                     [missing for _ in 1:max_num_priors], [missing for _ in 1:max_num_posteriors],
                     0., 0., NN.n_destruction_threshold)
+end
+
+
+
+function rectify!(dna::DendriteDNA, NN::Network)
+    lt = copy(dna.lifeTime)
+    dna.lifeTime = clamp(dna.lifeTime, 1., NN.maxDendriteLifeTime)
+
+    return lt != dna.lifeTime
+end
+function rectify!(dna::AxonPointDNA, NN::Network)
+    lt = copy(dna.lifeTime)
+    dna.lifeTime = clamp(dna.lifeTime, 1., NN.maxAxonPointLifeTime)
+
+    return lt != dna.lifeTime
+end
+function rectify!(dna::NeuroTransmitterDNA, NN::Network)
+    a = copy(dna.init_strength)
+    dna.init_strength = clamp(dna.init_strength, 0.1, NN.max_nt_strength)
+
+    return a != dna.init_strength
+end
+function rectify!(dna::SynapsDNA, NN::Network)
+    lt = copy(dna.lifeTime)
+    thr = copy(dna.THR)
+    r_rec = copy(dna.r_rec)
+    maxR = copy(dna.maxR)
+
+    dna.lifeTime = clamp(dna.lifeTime, 1., NN.maxSynapsLifeTime)
+    dna.THR = clamp(dna.THR, 0.5, NN.max_s_threshold)
+    dna.r_rec = max(1.1, dna.r_rec) # 1.1 because at 1 it has to increase
+    dna.maxR = max(1., dna.maxR)
+
+    return sum([lt != dna.lifeTime, thr != dna.THR, r_rec != dna.r_rec, maxR != dna.maxR])
+end
+function rectify!(dna::NeuronDNA, NN::Network)
+    lt = copy(dna.lifeTime)
+    dapir = copy(dna.den_and_ap_init_range)
+    thr = copy(dna.THR)
+
+    dna.lifeTime = clamp(dna.lifeTime, 1., NN.maxNeuronLifeTime)
+    dna.den_and_ap_init_range = max(1., dna.den_and_ap_init_range)
+    dna.THR = clamp(dna.THR, 0.5, NN.max_n_threshold)
+
+    return sum([lt != dna.lifeTime, dapir != dna.den_and_ap_init_range, thr != dna.THR])
+end
+
+function rectify!(dna::DNAStack, NN::Network)
+    s = 0
+    for nt in dna.nt_dna_samples
+        s += rectify!(nt, NN)
+    end
+    for syn in dna.syn_dna_samples
+        s += rectify!(syn, NN)
+    end
+    for n in dna.n_dna_samples
+        s += rectify!(n, NN)
+    end
+    return s
 end

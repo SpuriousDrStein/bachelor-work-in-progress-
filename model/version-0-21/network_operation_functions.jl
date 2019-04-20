@@ -159,7 +159,7 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
 
     if network_all_cells != []
         # input node position update
-        for i_nn in out_nodes
+        for i_nn in in_nodes
             if !i_nn.cell.referenced
                 total_v = [0.,0.]
                 for ap_sink in ap_sinks
@@ -177,7 +177,9 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
                 end
                 for i_nn2 in in_nodes
                     if i_nn2 !== i_nn
-                        total_v .+= min.(1 ./ direction(i_nn2.cell.position, i_nn.cell.position), [NN.size/4, NN.size/4])
+                        dir = direction(i_nn2.cell.position, i_nn.cell.position)
+                        mag = min(NN.minFuseDistance/vector_length(dir), NN.minFuseDistance)
+                        total_v .+= normalize(dir) .* mag
                     end
                 end
 
@@ -189,7 +191,7 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
         end
 
         # output node position update
-        for o_nn in get_output_nodes_in_all(NN)
+        for o_nn in out_nodes
             if !o_nn.cell.referenced
                 total_v = [0.,0.]
                 for d_sink in den_sinks
@@ -207,7 +209,9 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
                 end
                 for o_nn2 in get_output_nodes_in_all(NN)
                     if o_nn2 !== o_nn
-                        total_v .+= min.(1 ./ direction(o_nn2.cell.position, o_nn.cell.position), [NN.size/4, NN.size/4])
+                        dir = direction(o_nn2.cell.position, o_nn.cell.position)
+                        mag = min(NN.minFuseDistance/vector_length(dir), NN.minFuseDistance)
+                        total_v .+= normalize(dir) .* mag
                     end
                 end
 
@@ -319,24 +323,25 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
 
     # neuron position update
     # repel neurons away each other
-    if length(neurons) > 1
-        total_v = [[0.,0.] for _ in 1:length(neurons)]
-        for i in eachindex(neurons)
-            local_v = [0.,0.]
-
-            for n in neurons
-                if neurons[i] !== n
-                     local_v += direction(n.position, neurons[i].position)
-                end
-            end
-
-            total_v[i] = normalize(local_v) .* NN.neuron_repel_force #./ (length(neurons) .- 1)
-        end
-        for i in eachindex(total_v, neurons)
-            rand_v  = get_random_position(1) * NN.random_fluctuation_scale
-            neurons[i].position += Position(total_v[i]...) + rand_v
-        end
-    end
+    # if length(neurons) > 1
+    #     total_v = [[0.,0.] for _ in 1:length(neurons)]
+    #     for i in eachindex(neurons)
+    #         local_v = [0.,0.]
+    #
+    #         for n in neurons
+    #             mag = min(NN.minFuseDistance/distance(n.position, neurons[i].position), NN.minFuseDistance)
+    #             if neurons[i] !== n
+    #                  local_v += normalize(direction(n.position, neurons[i].position)) .* mag
+    #             end
+    #         end
+    #
+    #         total_v[i] = local_v./ length(neurons) .- 1
+    #     end
+    #     for i in eachindex(total_v, neurons)
+    #         rand_v  = get_random_position(1) * NN.random_fluctuation_scale
+    #         neurons[i].position += Position(total_v[i]...) + rand_v
+    #     end
+    # end
 end
 
 # STRUCTURE GENERATION FUNCTIONS
@@ -361,7 +366,7 @@ function fuse!(network_node::AllCell, ac::AllCell)
     end
 end
 function add_neuron!(NN::Network)
-    n = unfold(rand(NN.dna_stack.n_dna_samples), get_random_position(NN.size/2), NN)
+    n = unfold(rand(NN.dna_stack.n_dna_samples), get_random_position(NN.size), NN)
     NN.n_counter += 1
 
     append!(NN.components, [n])
@@ -378,7 +383,7 @@ function add_dendrite!(NN::Network, N::Neuron)
     if has_empty_prior(N)
         for i in eachindex(N.priors)
             if ismissing(N.priors[i])
-                d = AllCell(unfold(rand(NN.dna_stack.den_dna_samples), N.position + abs(get_random_position(N.den_and_ap_init_range)), NN))
+                d = AllCell(Dendrite(NN.dendriteLifeTime, N.position + get_random_position(N.den_and_ap_init_range)))
                 d.cell.position = rectify_position(d.cell.position, NN.size)
 
                 N.priors[i] = d
@@ -393,7 +398,7 @@ function add_dendrite!(NN::Network, N::Neuron, init_pos::Position)
     if has_empty_prior(N)
         for i in eachindex(N.priors)
             if ismissing(N.priors[i])
-                d = AllCell(unfold(rand(NN.dna_stack.den_dna_samples), init_pos, NN))
+                d = AllCell(Dendrite(NN.dendriteLifeTime, N.position + init_pos))
 
                 N.priors[i] = d
                 append!(NN.components, [d])
@@ -407,7 +412,7 @@ function add_axon_point!(NN::Network, N::Neuron)
     if has_empty_post(N)
         for i in eachindex(N.posteriors)
             if ismissing(N.posteriors[i])
-                ap = AllCell(unfold(rand(NN.dna_stack.ap_dna_samples), N.position - abs(get_random_position(N.den_and_ap_init_range)), NN))
+                ap = AllCell(Dendrite(NN.dendriteLifeTime, N.position + get_random_position(N.den_and_ap_init_range)))
                 ap.cell.position = rectify_position(ap.cell.position, NN.size)
 
                 N.posteriors[i] = ap
@@ -422,7 +427,7 @@ function add_axon_point!(NN::Network, N::Neuron, init_pos::Position)
     if has_empty_post(N)
         for i in eachindex(N.posteriors)
             if ismissing(N.posteriors[i])
-                ap = AllCell(unfold(rand(NN.dna_stack.ap_dna_samples), init_pos, NN))
+                ap = AllCell(Dendrite(NN.dendriteLifeTime, N.position + init_pos, NN))
 
                 N.posteriors[i] = ap
                 append!(NN.components, [ap])
@@ -432,6 +437,9 @@ function add_axon_point!(NN::Network, N::Neuron, init_pos::Position)
         end
     end
 end
+
+
+
 function runtime_instantiate_components!(NN::Network, iteration::Integer) # instantiate neurons, dendrites and ap's depending on iteration
     for n in get_all_neurons(NN)
         if iteration % n.den_init_interval == 0
@@ -493,10 +501,6 @@ function clean_network_components!(NN::Network)
                 end
 
                 if typeof(NN.components[n1].cell) != Synaps
-                    # update position to be inside max_range
-                    if vector_length(NN.components[n1].cell.position) > NN.components[n1].cell.max_length
-                        NN.components[n1].cell.position = Position((normalize(NN.components[n1].cell.position) .* NN.components[n1].cell.max_length)...)
-                    end
 
                     # remove duplicates in NN.components
                     for n2 in eachindex(NN.components)
@@ -512,24 +516,29 @@ function clean_network_components!(NN::Network)
                     end
                 end
             end
-        elseif typeof(NN.components[n1]) == Neuron
-            if NN.components[n1].lifeTime <= 0
-                NN.total_fitness += NN.components[n1].total_fitness
-                for pri in skipmissing(get_prior_all_cells(NN.components[n1]))
-                    if typeof(pri.cell) == InputNode
-                        pri.cell.referenced = false
-                    else
-                        pri = missing
-                    end
+        end
+    end
+    for nid in get_all_neuron_indecies(NN)
+        if NN.components[nid].lifeTime <= 0
+            NN.total_fitness += NN.components[nid].total_fitness
+            for pri in skipmissing(get_prior_all_cells(NN.components[nid]))
+                if typeof(pri.cell) == InputNode
+                    pri.cell.referenced = false
+                else
+                    pri = missing
                 end
-                for post in skipmissing(get_posterior_all_cells(NN.components[n1]))
-                    if typeof(post.cell) == OutputNode
-                        post.cell.referenced = false
-                    else
-                        post = missing
-                    end
+            end
+            for post in skipmissing(get_posterior_all_cells(NN.components[nid]))
+                if typeof(post.cell) == OutputNode
+                    post.cell.referenced = false
+                else
+                    post = missing
                 end
-                NN.components[n1] = missing
+            end
+            NN.components[nid] = missing
+        else
+            if vector_length(NN.components[nid].position) > NN.size
+                NN.components[nid].position = Position((normalize(NN.components[nid].position) .* NN.size)...)
             end
         end
     end

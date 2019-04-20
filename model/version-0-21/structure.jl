@@ -16,14 +16,6 @@ end
 
 
 # DNA STRUCTURES
-mutable struct DendriteDNA
-    max_length::FloatN
-    lifeTime::FloatN
-end
-mutable struct AxonPointDNA
-    max_length::FloatN
-    lifeTime::FloatN
-end
 mutable struct NeuroTransmitterDNA
     init_strength::FloatN # mean should be 1 for most "accurate" effect
 end
@@ -31,21 +23,12 @@ mutable struct SynapsDNA
     THR::FloatN
     r_rec::FloatN
     maxR::FloatN
-    lifeTime::FloatN
 end
 mutable struct NeuronDNA
-    lifeTime::FloatN
     THR::FloatN
-    max_num_priors::Integer
-    max_num_posteriors::Integer
-    den_init_interval::Integer
-    ap_init_interval::Integer
-    den_and_ap_init_range::FloatN
 end
 mutable struct DNAStack
     nt_dna_samples::Array{NeuroTransmitterDNA}
-    ap_dna_samples::Array{AxonPointDNA}
-    den_dna_samples::Array{DendriteDNA}
     syn_dna_samples::Array{SynapsDNA}
     n_dna_samples::Array{NeuronDNA}
 end
@@ -67,7 +50,6 @@ mutable struct NeuroTransmitter # small possitive or small negative
 end
 mutable struct Dendrite
     # constants
-    max_length::FloatN
     lifeTime::FloatN
 
     # change at t
@@ -75,7 +57,6 @@ mutable struct Dendrite
 end
 mutable struct AxonPoint
     # constants
-    max_length::FloatN
     lifeTime::FloatN
 
     # change at t
@@ -105,7 +86,6 @@ mutable struct Neuron
     # constants
     den_init_interval::Integer
     ap_init_interval::Integer
-    den_and_ap_init_range::FloatN
 
     # change at t
     position::Position
@@ -128,9 +108,9 @@ mutable struct Network
     # constants
     size::FloatN
     global_stdv::FloatN
-    maxNeuronLifeTime::FloatN
-    maxSynapsLifeTime::FloatN
-    maxDendriteLifeTime::FloatN
+    neuronLifeTime::FloatN
+    synapsLifeTime::FloatN
+    dendriteLifeTime::FloatN
     maxAxonPointLifeTime::FloatN
     minFuseDistance::FloatN
     ap_sink_attractive_force::FloatN # force: AxonPoint's -> ap_sinks
@@ -147,7 +127,7 @@ mutable struct Network
     heavy_life_decay::FloatN
     nt_retain_percentage::FloatN
     neuron_init_interval::Integer
-    min_ap_den_init_interval::Integer
+    ap_den_init_interval::Integer
     dna_stack::DNAStack
 
     # change at t
