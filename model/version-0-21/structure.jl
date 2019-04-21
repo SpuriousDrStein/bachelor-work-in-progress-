@@ -108,11 +108,11 @@ mutable struct Network
     # constants
     size::FloatN
     global_stdv::FloatN
-    neuronLifeTime::FloatN
-    synapsLifeTime::FloatN
-    dendriteLifeTime::FloatN
-    maxAxonPointLifeTime::FloatN
-    minFuseDistance::FloatN
+    neuron_lifetime::FloatN
+    synaps_lifetime::FloatN
+    dendrite_lifetime::FloatN
+    axon_point_lifetime::FloatN
+    min_fuse_distance::FloatN
     ap_sink_attractive_force::FloatN # force: AxonPoint's -> ap_sinks
     ap_surge_repulsive_force::FloatN
     den_surge_repulsive_force::FloatN
@@ -122,12 +122,14 @@ mutable struct Network
     max_nt_strength::FloatN
     max_n_threshold::FloatN
     max_s_threshold::FloatN
-    random_fluctuation_scale::FloatN
     light_life_decay::FloatN
     heavy_life_decay::FloatN
     nt_retain_percentage::FloatN
+    den_and_ap_init_range::FloatN
     neuron_init_interval::Integer
     ap_den_init_interval::Integer
+    max_num_priors::Integer
+    max_num_posteriors::Integer
     dna_stack::DNAStack
 
     # change at t

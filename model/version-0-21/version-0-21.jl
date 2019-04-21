@@ -3,13 +3,13 @@ include("functions.jl")
 
 # NETWORK HP's
 init_params =   Dict("NETWORK_SIZE"                 => FloatN(5),
-                "GLOBAL_STDV"                       => FloatN(1),
+                "GLOBAL_STDV"                       => FloatN(0.5),
                 "INIT_POSITION_STDV"                => FloatN(0.8),
                 "NEURON_LIFETIME"                   => FloatN(10000),
                 "SYNAPTIC_LIFETIME"                 => FloatN(10000),
                 "DENDRITE_LIFETIME"                 => FloatN(10000),
-                "MAX_AXONPOINT_LIFETIME"            => FloatN(10000),
-                "MIN_FUSE_DISTANCE"                 => FloatN(0.2),
+                "AXONPOINT_LIFETIME"                => FloatN(10000),
+                "MIN_FUSE_DISTANCE"                 => FloatN(0.3),
                 "AP_SINK_ATTRACTIVE_FORCE"          => FloatN(0.9), # force:    AxonPoint's -> ap_sinks
                 "DEN_SURGE_REPULSIVE_FORCE"         => FloatN(0.003), # repulsive force of den/occupied input -> den
                 "AP_SURGE_REPULSIVE_FORCE"          => FloatN(0.005), # repulsive force of ap/occupied output -> ap
@@ -17,19 +17,20 @@ init_params =   Dict("NETWORK_SIZE"                 => FloatN(5),
                 "OUTPUT_ATTRACTIVE_FORCE"           => FloatN(5),
                 "MAX_SYNAPTIC_THRESHOLD"            => FloatN(4),
                 "MAX_NEURON_THRESHOLD"              => FloatN(6),
+                "NEURON_REPEL_FORCE"                => FloatN(0),
                 "LITE_LIFE_DECAY"                   => FloatN(1.),
-                "HEAVY_LIFE_DECAY"                  => FloatN(5.),
+                "HEAVY_LIFE_DECAY"                  => FloatN(1.),
                 "NEURON_DESTRUCTION_THRESHOLD"      => FloatN(0.1),
                 "SYNAPS_DESTRUCTION_THRESHOLD"      => FloatN(0.05),
                 "MAX_NT_STRENGTH"                   => FloatN(1.5),
-                "NT_RETAIN_PERCENTAGE"              => FloatN(0.5),
+                "NT_RETAIN_PERCENTAGE"              => FloatN(0.8),
                 "MAX_RESISTANCE"                    => FloatN(1.6),
-                "N_AP_DEN_INIT_RANGE"               => FloatN(0.5),
-                "MAX_NUM_PRIORS"                    => 10,
-                "MAX_NUM_POSTERIORS"                => 10,
-                "INIT_NUM_NEURONS"                  => 3,
-                "INIT_PRIORS"                       => 4,
-                "INIT_POSTERIORS"                   => 4,
+                "N_AP_DEN_INIT_RANGE"               => FloatN(0.2),
+                "MAX_NUM_PRIORS"                    => 5,
+                "MAX_NUM_POSTERIORS"                => 5,
+                "INIT_NUM_NEURONS"                  => 25,
+                "INIT_PRIORS"                       => 2,
+                "INIT_POSTERIORS"                   => 2,
                 "NEURON_INIT_INTERVAL"              => 10000,
                 "AP_DEN_INIT_INTERVAL"              => 5000, # a minimum to negate the possibility of calling the add_dendrite or add_axon_point function every timestep
                 "TOP_BUFFER_LENGTH"                 => 10,
@@ -38,7 +39,7 @@ init_params =   Dict("NETWORK_SIZE"                 => FloatN(5),
                 "DATA_OUTPUT_SIZE"                  => 3)
 
 
-net_episodes = 400
+net_episodes = 150
 env_episodes = 5
 iterations = 500
 parallel_networks = 4
@@ -51,15 +52,12 @@ v = :v1
 best_dna, best_init_pos, metrics = unsupervised_train(net_episodes, env_episodes, iterations, parallel_networks, env, v, init_params)
 
 
-
-
-metrics2 = unsupervised_test(maximum(best_dna)[2], maximum(best_init_pos)[2], test_episodes, test_iterations, env, v, init_params, false)
-
+metrics2 = unsupervised_test(maximum(best_dna)[2], maximum(best_init_pos)[2], test_episodes, test_iterations, env, v, init_params, true)
 for j in 1:test_episodes
-    for i in 1:length(metrics2["episode_$(j)_positions"])
+    for i in 100:200 #length(metrics2["episode_$(j)_positions"])
         t_p = metrics2["episode_$(j)_positions"][i]
         t_c = metrics2["episode_$(j)_connections"][i]
-
+        sleep(1)
         display_timestep(t_p, t_c, init_params, j, i)
     end
 end

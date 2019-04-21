@@ -10,10 +10,10 @@ function initialize(dna_stack, init_positions, params)
     nn = initialize_network(
                 params["NETWORK_SIZE"],
                 params["GLOBAL_STDV"],
-                params["MAX_NEURON_LIFETIME"],
-                params["MAX_SYNAPTIC_LIFETIME"],
-                params["MAX_DENDRITE_LIFETIME"],
-                params["MAX_AXONPOINT_LIFETIME"],
+                params["NEURON_LIFETIME"],
+                params["SYNAPTIC_LIFETIME"],
+                params["DENDRITE_LIFETIME"],
+                params["AXONPOINT_LIFETIME"],
                 params["MIN_FUSE_DISTANCE"],
                 params["AP_SINK_ATTRACTIVE_FORCE"],
                 params["AP_SURGE_REPULSIVE_FORCE"],
@@ -24,12 +24,14 @@ function initialize(dna_stack, init_positions, params)
                 params["MAX_NT_STRENGTH"],
                 params["MAX_NEURON_THRESHOLD"],
                 params["MAX_SYNAPTIC_THRESHOLD"],
-                params["RANDOM_FLUCTUATION"],
                 params["LITE_LIFE_DECAY"],
                 params["HEAVY_LIFE_DECAY"],
                 params["NT_RETAIN_PERCENTAGE"],
+                params["N_AP_DEN_INIT_RANGE"],
                 params["NEURON_INIT_INTERVAL"],
-                params["MIN_AP_DEN_INIT_INTERVAL"],
+                params["AP_DEN_INIT_INTERVAL"],
+                params["MAX_NUM_PRIORS"],
+                params["MAX_NUM_POSTERIORS"],
                 params["NEURON_DESTRUCTION_THRESHOLD"],
                 params["SYNAPS_DESTRUCTION_THRESHOLD"],
                 dna_stack)
@@ -42,6 +44,9 @@ function initialize(dna_stack, init_positions, params)
     return nn
 end
 
+
+
+
 function get_positions(x, params)
     inn = params["INIT_NUM_NEURONS"] * (params["INIT_PRIORS"] + params["INIT_POSTERIORS"]) + params["DATA_INPUT_SIZE"] + params["DATA_OUTPUT_SIZE"]
     ps = []
@@ -50,7 +55,6 @@ function get_positions(x, params)
     end
     return ps
 end
-
 function sample_init_positions_from_set(x, params)
     inn = params["INIT_NUM_NEURONS"] * (params["INIT_PRIORS"] + params["INIT_POSTERIORS"]) + params["DATA_INPUT_SIZE"] + params["DATA_OUTPUT_SIZE"]
     ns = params["NETWORK_SIZE"]
@@ -58,6 +62,18 @@ function sample_init_positions_from_set(x, params)
     xx = [clamp(rand(Normal(ax, params["INIT_POSITION_STDV"])), -ns, ns) for ax in x]
     for ip in 1:2:inn*2
         append!(ps, [Position(xx[ip:ip+1]...)])
+    end
+    return ps, xx
+end
+function sample_init_positions_from_sets_random(sets, params)
+    inn = params["INIT_NUM_NEURONS"] * (params["INIT_PRIORS"] + params["INIT_POSTERIORS"]) + params["DATA_INPUT_SIZE"] + params["DATA_OUTPUT_SIZE"]
+    ns = params["NETWORK_SIZE"]
+    ps = []
+    xx = []
+    for ip in 1:2:inn*2
+        pos = rand(sets)[ip:ip+1]
+        append!(ps, [Position(pos...)])
+        append!(xx, [pos...])
     end
     return ps, xx
 end
@@ -73,16 +89,12 @@ function get_random_init_positions(params)
 end
 
 
-get_nts_from_dna(dna, d) = [NeuroTransmitterDNA(dna[1:d][j]) for j in 1:d]
-get_syns_from_dna(dna, d) = [SynapsDNA(dna[d+1:d*2][j], dna[d*2+1:d*3][j], dna[d*3+1:d*4][j]) for j in 1:d]
-get_ns_from_dna(dna, d, max_pap) = [NeuronDNA(dna[d*4+1:d*5][j]) for j in 1:d]
-
 function get_dna(x, params)
     d = params["DNA_SAMPLE_SIZE"] # because shorter indexing
 
-    ntd = get_nts_from_dna(x, d)
-    sd = get_syns_from_dna(x, d)
-    nd = get_ns_from_dna(x, d)
+    ntd = [NeuroTransmitterDNA(x[1:d][j]) for j in 1:d]
+    sd = [SynapsDNA(x[d+1:d*2][j], x[d*2+1:d*3][j], x[d*3+1:d*4][j]) for j in 1:d]
+    nd = [NeuronDNA(x[d*4+1:d*5][j]) for j in 1:d]
 
     dna_stack = DNAStack(ntd, sd, nd)
 
@@ -95,22 +107,21 @@ function sample_from_set_plain(x, p)
     d = p["DNA_SAMPLE_SIZE"] # because shorter indexing
     stdv = p["GLOBAL_STDV"]
 
-    nt_init_strs = [rand(Normal(x[i], stdv) for i in 1:d]
+    nt_init_strs = [rand(Normal(x[i]), stdv) for i in 1:d]
 
-    syn_thr   = [rand(Normal(x[i], stdv) for i in d+1:(d*2)]
-    syn_r_rec = [rand(Normal(x[i], stdv) for i in (d*2)+1:(d*3)]
-    syn_maxR  = [rand(Normal(x[i], stdv) for i in (d*3)+1:(d*4)]
+    syn_thr   = [rand(Normal(x[i]), stdv) for i in d+1:(d*2)]
+    syn_r_rec = [rand(Normal(x[i]), stdv) for i in (d*2)+1:(d*3)]
+    syn_maxR  = [rand(Normal(x[i]), stdv) for i in (d*3)+1:(d*4)]
 
-    n_thr  = [rand(Normal(x[i], stdv) for i in (d*4)+1:(d*5)]
-    n_ap_den_init_r = [rand(Normal(x[i], stdv) for i in (d*7)+1:(d*8)]
+    n_thr  = [rand(Normal(x[i]), stdv) for i in (d*4)+1:(d*5)]
 
-    xx = [nt_init_strs..., syn_thr..., syn_r_rec..., syn_maxR..., n_thr..., n_den_init_int..., n_ap_init_int...]
+    xx = [nt_init_strs..., syn_thr..., syn_r_rec..., syn_maxR..., n_thr...]
 
-    dna_stack = DNAStack([], [], [], [], [])
+    dna_stack = DNAStack([], [], [])
     for i in 1:d
         append!(dna_stack.nt_dna_samples, [NeuroTransmitterDNA(nt_init_strs[i])])
         append!(dna_stack.syn_dna_samples, [SynapsDNA(syn_thr[i], syn_r_rec[i], syn_maxR[i])])
-        append!(dna_stack.n_dna_samples, [NeuronDNA(n_thr[i], p["MAX_NUM_PRIORS"], p["MAX_NUM_POSTERIORS"], p["AP_DEN_INIT_INTERVAL"], p["AP_DEN_INIT_INTERVAL"], p["N_AP_DEN_INIT_RANGE"])])
+        append!(dna_stack.n_dna_samples, [NeuronDNA(n_thr[i])])
     end
 
     return dna_stack, xx
@@ -123,48 +134,70 @@ function get_random_set(p)
 
     syn_thr   = [rand(Uniform(0.5, p["MAX_SYNAPTIC_THRESHOLD"])) for i in d+1:(d*2)]
     syn_r_rec = [rand(Uniform(1.1, 100.)) for i in (d*2)+1:(d*3)]
-    syn_maxR  = [rand(Uniform(1., p["MAX_MAX_RESISTANCE"])) for i in (d*3)+1:(d*4)]
+    syn_maxR  = [rand(Uniform(1., p["MAX_RESISTANCE"])) for i in (d*3)+1:(d*4)]
 
     n_thr  = [rand(Uniform(0.5, p["MAX_SYNAPTIC_THRESHOLD"])) for i in (d*4)+1:(d*5)]
-    n_ap_den_init_r = [rand(Uniform(1., p["NETWORK_SIZE"])) for i in (d*7)+1:(d*8)]
 
+    xx = [nt_init_strs..., syn_thr..., syn_r_rec..., syn_maxR..., n_thr...]
 
-    xx = [nt_init_strs..., syn_thr..., syn_r_rec..., syn_maxR..., n_thr..., n_den_init_int..., n_ap_init_int...]
-
-    dna_stack = DNAStack([], [], [], [], [])
+    dna_stack = DNAStack([], [], [])
     for i in 1:d
         append!(dna_stack.nt_dna_samples, [NeuroTransmitterDNA(nt_init_strs[i])])
         append!(dna_stack.syn_dna_samples, [SynapsDNA(syn_thr[i], syn_r_rec[i], syn_maxR[i])])
-        append!(dna_stack.n_dna_samples, [NeuronDNA(n_thr[i], p["MAX_NUM_PRIORS"], p["MAX_NUM_POSTERIORS"], p["AP_DEN_INIT_INTERVAL"], p["AP_DEN_INIT_INTERVAL"], p["N_AP_DEN_INIT_RANGE"])])
+        append!(dna_stack.n_dna_samples, [NeuronDNA(n_thr[i])])
     end
 
     return dna_stack, xx
 end
 
 function sample_from_set_scaled(x, p; scl=1.)
-    # d = p["DNA_SAMPLE_SIZE"] # because shorter indexing
-    # stdv = p["GLOBAL_STDV"]
-    #
-    # nt_init_strs = [rand(Uniform(0.1, p["MAX_NT_STRENGTH"])) for i in 1:d]
-    #
-    # syn_thr   = [rand(Uniform(0.5, p["MAX_SYNAPTIC_THRESHOLD"])) for i in d+1:(d*2)]
-    # syn_r_rec = [rand(Uniform(1.1, 100.)) for i in (d*2)+1:(d*3)]
-    # syn_maxR  = [rand(Uniform(1., p["MAX_MAX_RESISTANCE"])) for i in (d*3)+1:(d*4)]
-    #
-    # n_thr  = [rand(Uniform(0.5, p["MAX_SYNAPTIC_THRESHOLD"])) for i in (d*4)+1:(d*5)]
-    # n_ap_den_init_r = [rand(Uniform(1., p["NETWORK_SIZE"])) for i in (d*7)+1:(d*8)]
-    #
-    #
-    # xx = [nt_init_strs..., syn_thr..., syn_r_rec..., syn_maxR..., n_thr..., n_den_init_int..., n_ap_init_int...]
-    #
-    # dna_stack = DNAStack([], [], [], [], [])
-    # for i in 1:d
-    #     append!(dna_stack.nt_dna_samples, [NeuroTransmitterDNA(nt_init_strs[i])])
-    #     append!(dna_stack.syn_dna_samples, [SynapsDNA(syn_thr[i], syn_r_rec[i], syn_maxR[i])])
-    #     append!(dna_stack.n_dna_samples, [NeuronDNA(n_thr[i], p["MAX_NUM_PRIORS"], p["MAX_NUM_POSTERIORS"], p["AP_DEN_INIT_INTERVAL"], p["AP_DEN_INIT_INTERVAL"], p["N_AP_DEN_INIT_RANGE"])])
-    # end
-    #
-    # return dna_stack, xx
+    d = p["DNA_SAMPLE_SIZE"] # because shorter indexing
+    stdv = p["GLOBAL_STDV"]
+
+    nt_init_strs = [rand(Normal(x[i], stdv * scl * 0.4)) for i in 1:d]
+
+    syn_thr   = [rand(Normal(x[i], stdv * scl * 0.4)) for i in d+1:(d*2)]
+    syn_r_rec = [rand(Normal(x[i], stdv * scl * 0.4)) for i in (d*2)+1:(d*3)]
+    syn_maxR  = [rand(Normal(x[i], stdv * scl * 2)) for i in (d*3)+1:(d*4)]
+
+    n_thr  = [rand(Normal(x[i], stdv * scl * 0.4)) for i in (d*4)+1:(d*5)]
+
+
+    xx = [nt_init_strs..., syn_thr..., syn_r_rec..., syn_maxR..., n_thr...]
+
+    dna_stack = DNAStack([], [], [])
+    for i in 1:d
+        append!(dna_stack.nt_dna_samples, [NeuroTransmitterDNA(nt_init_strs[i])])
+        append!(dna_stack.syn_dna_samples, [SynapsDNA(syn_thr[i], syn_r_rec[i], syn_maxR[i])])
+        append!(dna_stack.n_dna_samples, [NeuronDNA(n_thr[i])])
+    end
+
+    return dna_stack, xx
+end
+
+function sample_from_sets_random(sets, p)
+    d = p["DNA_SAMPLE_SIZE"] # because shorter indexing
+    stdv = p["GLOBAL_STDV"]
+
+    nt_init_strs = [rand(sets)[i] for i in 1:d]
+
+    syn_thr   = [rand(sets)[i] for i in d+1:(d*2)]
+    syn_r_rec = [rand(sets)[i] for i in (d*2)+1:(d*3)]
+    syn_maxR  = [rand(sets)[i] for i in (d*3)+1:(d*4)]
+
+    n_thr  = [rand(sets)[i] for i in (d*4)+1:(d*5)]
+
+
+    xx = [nt_init_strs..., syn_thr..., syn_r_rec..., syn_maxR..., n_thr...]
+
+    dna_stack = DNAStack([], [], [])
+    for i in 1:d
+        append!(dna_stack.nt_dna_samples, [NeuroTransmitterDNA(nt_init_strs[i])])
+        append!(dna_stack.syn_dna_samples, [SynapsDNA(syn_thr[i], syn_r_rec[i], syn_maxR[i])])
+        append!(dna_stack.n_dna_samples, [NeuronDNA(n_thr[i])])
+    end
+
+    return dna_stack, xx
 end
 
 function sample_from_set_decay(x, p, j)
@@ -172,6 +205,7 @@ end
 
 function sample_from_set_scaled_decay(x, p, j; scl=0.3)
 end
+
 
 
 function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterations::Integer, parallel_networks::Integer, env, env_version, params::Dict)
@@ -182,7 +216,6 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
     dna_ss = params["DNA_SAMPLE_SIZE"]
     best_nets_buf = [[-9999, get_random_set(params)[2]] for _ in 1:params["TOP_BUFFER_LENGTH"]]
     best_init_pos = [[-9999, get_random_init_positions(params)[2]] for _ in 1:params["TOP_BUFFER_LENGTH"]]
-
 
     metrics = Dict([("net_$(n)_current_fitness" => []) for n in 1:parallel_networks]...,
                     [("net_$(n)_neuron_fitness" => []) for n in 1:parallel_networks]...,
@@ -199,23 +232,31 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
 
         for n in 1:parallel_networks
             if rand() > clamp(1/log(e), 0, 1)
-                net_distro = softmax([bn[1]/mean([i[1] for i in best_nets_buf]) for bn in best_nets_buf])
-                net_params = Distributions.sample(Random.GLOBAL_RNG, best_nets_buf, StatsBase.Weights(net_distro))[2]
-                dna_stack, x = sample_from_set_scaled(net_params, params)
-            else
                 dna_stack, x = get_random_set(params)
+            else
+                if rand() > clamp(1/log(e), 0, 1)
+                    net_distro = softmax([bn[1]/mean([i[1] for i in best_nets_buf]) for bn in best_nets_buf])
+                    net_params = Distributions.sample(Random.GLOBAL_RNG, best_nets_buf, StatsBase.Weights(net_distro))[2]
+                    dna_stack, x = sample_from_set_scaled(net_params, params)
+                else
+                    dna_stack, x = sample_from_sets_random([bnb[2] for bnb in best_nets_buf], params)
+                end
             end
 
             if rand() > clamp(1/log(e), 0, 1)
-                pos_distro = softmax([bp[1]/mean([i[1] for i in best_init_pos]) for bp in best_init_pos])
-                pos_params = Distributions.sample(Random.GLOBAL_RNG, best_init_pos, StatsBase.Weights(pos_distro))[2]
-                init_positions, p = sample_init_positions_from_set(pos_params, params)
-            else
                 init_positions, p = get_random_init_positions(params)
+            else
+                if rand() > clamp(1/log(e), 0, 1)
+                    pos_distro = softmax([bp[1]/mean([i[1] for i in best_init_pos]) for bp in best_init_pos])
+                    pos_params = Distributions.sample(Random.GLOBAL_RNG, best_init_pos, StatsBase.Weights(pos_distro))[2]
+                    init_positions, p = sample_init_positions_from_set(pos_params, params)
+                else
+                    init_positions, p = sample_init_positions_from_sets_random([bn[2] for bn in best_init_pos], params)
+                end
             end
 
             net = initialize(dna_stack, init_positions, params)
-            net.total_fitness -= rectify!(net.dna_stack, net) * 500
+            _ = rectify!(net.dna_stack, net)
 
             I = 1 # for counting iterations
             t = time()
@@ -239,16 +280,18 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
                     runtime_instantiate_components!(net, I)
                     I += 1
 
-
                     if I % 100 == 0
                         if !all([inn.referenced for inn in get_input_nodes(net)]) && get_all_neurons(net) != []
-                            add_dendrite!(net, rand(get_all_neurons(net)))
+                            net.total_fitness -= 500
+                            # add_dendrite!(net, rand(get_all_neurons(net)))
                         end
                         if !all([onn.referenced for onn in get_output_nodes(net)]) && get_all_neurons(net) != []
-                            add_axon_point!(net, rand(get_all_neurons(net)))
+                            net.total_fitness -= 500
+                            # add_axon_point!(net, rand(get_all_neurons(net)))
                         end
                     end
 
+                    # println([nnn.Q for nnn in get_all_neurons(net)])
 
                     out = [on.value for on in get_output_nodes(net)]
                     a = action_space[argmax(out)]
@@ -258,7 +301,7 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
                         net.total_fitness += 10000
                         sum_env_rewards += 10000
                     else
-                        net.total_fitness += r
+                        net.total_fitness += 0
                     end
 
                     if env.done
@@ -285,6 +328,8 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
             end
 
             tally_up_fitness!(net)
+
+
             append!(nets, [(net.total_fitness => copy(x))])
             append!(net_poss, [(net.total_fitness => copy(p))])
         end
@@ -356,12 +401,12 @@ function unsupervised_test(sample, init_positions, episodes::Integer, iterations
 
             if I % 100 == 0
                 if !all([inn.referenced for inn in get_input_nodes(net)]) && get_all_neurons(net) != []
-                    println("added dendrite")
-                    add_dendrite!(net, rand(get_all_neurons(net)))
+                    net.total_fitness -= 5000
+                    # add_dendrite!(net, rand(get_all_neurons(net)))
                 end
                 if !all([onn.referenced for onn in get_output_nodes(net)]) && get_all_neurons(net) != []
-                    println("added ap")
-                    add_axon_point!(net, rand(get_all_neurons(net)))
+                    net.total_fitness -= 5000
+                    # add_axon_point!(net, rand(get_all_neurons(net)))
                 end
             end
 
