@@ -61,9 +61,6 @@ function propergate!(N::Neuron, NN::Network, den_sinks::Array, ap_surges::Array)
             elseif typeof(a.cell) == AxonPoint
                 append!(den_sinks, [Sink(copy(a.cell.position), N.Q/length(post_all))])
                 append!(ap_surges, [Surge(copy(a.cell.position), NN.ap_surge_repulsive_force)])
-            elseif typeof(a.cell) == OutputNode
-                a.cell.value = N.Q/length(post_all)
-                append!(ap_surges, [Surge(copy(a.cell.position), NN.ap_surge_repulsive_force)])
             end
         end
     else

@@ -232,27 +232,33 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
 
         for n in 1:parallel_networks
             if rand() > clamp(1/log(e), 0, 1)
-                dna_stack, x = get_random_set(params)
-            else
                 if rand() > clamp(1/log(e), 0, 1)
+                    println("$(n) sample dna combinations")
+                    dna_stack, x = sample_from_sets_random([bnb[2] for bnb in best_nets_buf], params)
+                else
+                    println("$(n) sample dna normal")
                     net_distro = softmax([bn[1]/mean([i[1] for i in best_nets_buf]) for bn in best_nets_buf])
                     net_params = Distributions.sample(Random.GLOBAL_RNG, best_nets_buf, StatsBase.Weights(net_distro))[2]
                     dna_stack, x = sample_from_set_scaled(net_params, params)
-                else
-                    dna_stack, x = sample_from_sets_random([bnb[2] for bnb in best_nets_buf], params)
                 end
+            else
+                println("$(n) sample dna random")
+                dna_stack, x = get_random_set(params)
             end
 
             if rand() > clamp(1/log(e), 0, 1)
-                init_positions, p = get_random_init_positions(params)
-            else
                 if rand() > clamp(1/log(e), 0, 1)
+                    println("$(n) sample position combinations")
+                    init_positions, p = sample_init_positions_from_sets_random([bn[2] for bn in best_init_pos], params)
+                else
+                    println("$(n) sample position normal")
                     pos_distro = softmax([bp[1]/mean([i[1] for i in best_init_pos]) for bp in best_init_pos])
                     pos_params = Distributions.sample(Random.GLOBAL_RNG, best_init_pos, StatsBase.Weights(pos_distro))[2]
                     init_positions, p = sample_init_positions_from_set(pos_params, params)
-                else
-                    init_positions, p = sample_init_positions_from_sets_random([bn[2] for bn in best_init_pos], params)
                 end
+            else
+                println("$(n) sample position random")
+                init_positions, p = get_random_init_positions(params)
             end
 
             net = initialize(dna_stack, init_positions, params)
@@ -272,13 +278,17 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
                 for i in 1:iterations
                     # for Acrobot
                     state = Array(s)
-                    state = [(s[2] > 0), (s[2] < 0), (s[4] > 0), (s[4] < 0)]  # [(s[2] > 0) * abs(s[2]), (s[2] < 0) * abs(s[2]), (s[4] > 0) * abs(s[4]), (s[4] < 0) * abs(s[4])]
+                    state = [s[1]>0,s[1]<0, s[2]>0,s[2]<0, s[3]>0,s[3]<0]# [(s[2] > 0), (s[2] < 0), (s[4] > 0), (s[4] < 0)]
 
-                    den_sinks, den_surges, ap_sinks, ap_surges = value_step!(net, state)
-                    state_step!(net, den_sinks, den_surges, ap_sinks, ap_surges)
-                    clean_network_components!(net)
-                    runtime_instantiate_components!(net, I)
+                    for _ in 1:3
+                        den_sinks, den_surges, ap_sinks, ap_surges = value_step!(net, state)
+                        state_step!(net, den_sinks, den_surges, ap_sinks, ap_surges)
+                        clean_network_components!(net)
+                        # runtime_instantiate_components!(net, I)
+                    end
+
                     I += 1
+
 
                     if I % 100 == 0
                         if !all([inn.referenced for inn in get_input_nodes(net)]) && get_all_neurons(net) != []
@@ -297,12 +307,12 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
                     a = action_space[argmax(out)]
                     r, s = OpenAIGym.step!(env, a)
 
-                    if r > 0
-                        net.total_fitness += 10000
-                        sum_env_rewards += 10000
-                    else
-                        net.total_fitness += 0
-                    end
+                    net.total_fitness += r
+                    sum_env_rewards += r
+                    # if r > 0
+                    # else
+                    #     net.total_fitness += 0
+                    # end
 
                     if env.done
                         break
@@ -376,7 +386,14 @@ function unsupervised_test(sample, init_positions, episodes::Integer, iterations
         for i in 1:iterations
             # for Acrobot
             state = Array(s)
-            state = [(s[2] > 0), (s[2] < 0), (s[4] > 0), (s[4] < 0)]  # [(s[2] > 0) * abs(s[2]), (s[2] < 0) * abs(s[2]), (s[4] > 0) * abs(s[4]), (s[4] < 0) * abs(s[4])]
+            state = [s[1]>0,s[1]<0, s[2]>0,s[2]<0, s[3]>0,s[3]<0]# [(s[2] > 0), (s[2] < 0), (s[4] > 0), (s[4] < 0)]
+
+
+            den_sinks, den_surges, ap_sinks, ap_surges = value_step!(net, state)
+            state_step!(net, den_sinks, den_surges, ap_sinks, ap_surges)
+            clean_network_components!(net)
+            runtime_instantiate_components!(net, I)
+            I += 1
 
             positions, connections = get_all_relations(net) # returns [np, app, denp, synp, inp, outp], connections
             if "episode_$(e)_positions" in keys(metrics)
@@ -389,14 +406,6 @@ function unsupervised_test(sample, init_positions, episodes::Integer, iterations
             else
                 metrics["episode_$(e)_connections"] = [connections]
             end
-
-
-            den_sinks, den_surges, ap_sinks, ap_surges = value_step!(net, state)
-            state_step!(net, den_sinks, den_surges, ap_sinks, ap_surges)
-            clean_network_components!(net)
-            runtime_instantiate_components!(net, I)
-            I += 1
-
 
 
             if I % 100 == 0

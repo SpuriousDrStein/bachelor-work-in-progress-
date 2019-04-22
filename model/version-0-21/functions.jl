@@ -26,12 +26,12 @@ function abs(p::Position); Position([abs(p.x), abs(p.y)]...); end
 function display_timestep(positions, connections, params, episode, iteration) # [np, app, denp, synp, inp, outp], cons
     l = @layout [a b{0.2w}]
     p1 = scatter(title="episode $episode; iteration $iteration", leg=false, xlabel="position x", ylabel="position y", xlims=(-params["NETWORK_SIZE"], params["NETWORK_SIZE"]), ylim=(-params["NETWORK_SIZE"], params["NETWORK_SIZE"]))
-    scatter!([ac[1].x for ac in positions[1]], [ac[1].y for ac in positions[1]], c="blue", markersize=[3+ac[2]*3 for ac in positions[1]])
+    scatter!([ac[1].x for ac in positions[1]], [ac[1].y for ac in positions[1]], c="blue", markersize=[3+ac[2] for ac in positions[1]])
     scatter!([ac[1].x for ac in positions[2]], [ac[1].y for ac in positions[2]], c="yellow", markersize=[3 for ac in positions[2]])
     scatter!([ac[1].x for ac in positions[3]], [ac[1].y for ac in positions[3]], c="green", markersize=[3 for ac in positions[3]])
-    scatter!([ac[1].x for ac in positions[4]], [ac[1].y for ac in positions[4]], c="red", markersize=[3+ac[2]*3 for ac in positions[4]])
-    scatter!([ac[1].x for ac in positions[5]], [ac[1].y for ac in positions[5]], c="magenta", markersize=[3+ac[2]*3 for ac in positions[5]])
-    scatter!([ac[1].x for ac in positions[6]], [ac[1].y for ac in positions[6]], c="black", markersize=[3+ac[2]*3 for ac in positions[6]])
+    scatter!([ac[1].x for ac in positions[4]], [ac[1].y for ac in positions[4]], c="red", markersize=[3+ac[2] for ac in positions[4]])
+    scatter!([ac[1].x for ac in positions[5]], [ac[1].y for ac in positions[5]], c="magenta", markersize=[3+ac[2] for ac in positions[5]])
+    scatter!([ac[1].x for ac in positions[6]], [ac[1].y for ac in positions[6]], c="black", markersize=[3+ac[2] for ac in positions[6]])
     for c in connections
         plot!([c[1].x, c[2].x], [c[1].y, c[2].y], c="red", linewidth=0.1, linealpha=0.6,  l=:arrow)
     end
