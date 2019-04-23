@@ -46,10 +46,9 @@ function update_synaps!(s::AllCell, NN::Network, dispersion_collection)
     s.cell.total_fitness += s.cell.d_total_fitness
 
     if s.cell.d_total_fitness <= s.cell.destruction_threshold
-        s.cell.lifeTime -= NN.heavy_life_decay
-    else
-        s.cell.lifeTime -= NN.light_life_decay
+        s.cell.total_fitness -= 1
     end
+    s.cell.lifeTime -= NN.lite_life_decay
 end
 function propergate!(N::Neuron, NN::Network, den_sinks::Array, ap_surges::Array)
     post_all = get_posterior_all_cells(N)
@@ -123,10 +122,10 @@ function value_step!(NN::Network, input::Array)
         propergate!(NN.components[n_i], NN, den_sinks, ap_surges)
 
         if NN.components[n_i].d_total_fitness <= NN.components[n_i].destruction_threshold
-            NN.components[n_i].lifeTime -= NN.heavy_life_decay
-        else
-            NN.components[n_i].lifeTime -= NN.light_life_decay
+            NN.components[n_i].total_fitness -= 1
         end
+
+        NN.components[n_i].lifeTime -= NN.lite_life_decay
     end
     return den_sinks, den_surges, ap_sinks, ap_surges
 end
@@ -236,7 +235,7 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
             total_v ./= (length(den_sinks) + length(den_surges))
             den.cell.position += Position(total_v...)
 
-            den.cell.lifeTime -= NN.light_life_decay
+            den.cell.lifeTime -= NN.lite_life_decay
 
             for i_n in get_input_nodes_in_all(NN)
                 if distance(den.cell.position, i_n.cell.position) <= NN.min_fuse_distance
@@ -277,7 +276,7 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
             total_v ./= (length(ap_sinks) + length(ap_surges))
             ap.cell.position += Position(total_v...)
 
-            ap.cell.lifeTime -= NN.light_life_decay
+            ap.cell.lifeTime -= NN.lite_life_decay
 
             # fuse with dendrite if near
             for d in get_dendrites_in_all(network_all_cells)
@@ -480,7 +479,7 @@ function clean_network_components!(NN::Network)
             if !ismissing(NN.components[n1])
                 # update position to be inside network
                 if vector_length(NN.components[n1].cell.position) > NN.size
-                    NN.components[n1].cell.position = Position((normalize(NN.components[n1].cell.position) .* NN.size)...)
+                    NN.components[n1].cell.position = change_length(NN.components[n1].position, NN.size)
                 end
 
                 # remove duplcate dens and aps in NN.components
@@ -518,14 +517,14 @@ function clean_network_components!(NN::Network)
             NN.components[nid] = missing
         else
             if vector_length(NN.components[nid].position) > NN.size
-                NN.components[nid].position = Position((normalize(NN.components[nid].position) .* NN.size)...)
+                NN.components[nid].position = change_length(NN.components[nid].position, NN.size)
             end
         end
     end
     for io_comp in NN.IO_components
         # update position to be inside network
         if vector_length(io_comp.cell.position) > NN.size
-            io_comp.cell.position = Position((normalize(io_comp.cell.position) .* NN.size)...)
+            io_comp.cell.position = change_length(io_comp.cell.position, NN.size)
         end
     end
     NN.components = collect(skipmissing(NN.components))

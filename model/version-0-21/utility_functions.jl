@@ -61,6 +61,10 @@ function get_random_position(range)
     return Position(rand(Uniform(-range, range)), rand(Uniform(-range, range)))
 end
 
+function change_length(position::Position, length)
+    Position((normalize(position) .* length)...)
+end
+
 function get_all_relations(NN::Network)
     np = []
     app = []

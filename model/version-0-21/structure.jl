@@ -122,7 +122,7 @@ mutable struct Network
     max_nt_strength::FloatN
     max_n_threshold::FloatN
     max_s_threshold::FloatN
-    light_life_decay::FloatN
+    lite_life_decay::FloatN
     heavy_life_decay::FloatN
     nt_retain_percentage::FloatN
     den_and_ap_init_range::FloatN

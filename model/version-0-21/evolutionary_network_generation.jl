@@ -1,12 +1,14 @@
 include(".\\..\\..\\global_utility_functions\\activation_functions.jl")
 
-import OpenAIGym
+using OpenAIGym
+using Distributions
 import Random
-import Distributions
 import StatsBase
 
+to_degree(x) = x*180/π
+
 # FUNCTIONS
-function initialize(dna_stack, init_positions, params)
+function initialize(dna_stack, input_node_positions, output_node_positions, init_positions, params)
     nn = initialize_network(
                 params["NETWORK_SIZE"],
                 params["GLOBAL_STDV"],
@@ -36,8 +38,28 @@ function initialize(dna_stack, init_positions, params)
                 params["SYNAPS_DESTRUCTION_THRESHOLD"],
                 dna_stack)
 
-    input_nodes = [AllCell(InputNode(init_positions[i], 0., false)) for i in 1:params["DATA_INPUT_SIZE"]] # InputNode(Position(hns + rand(Uniform(0, 1))*hns, hns + rand(Uniform(0, 1))*hns)
-    out_nodes = [AllCell(OutputNode(init_positions[params["DATA_INPUT_SIZE"]+i], 0., false)) for i in 1:params["DATA_OUTPUT_SIZE"]] # Position(-hns + rand(Uniform(-1, 0))*hns, -hns + rand(Uniform(-1, 0))*hns)
+    input_nodes = [AllCell(InputNode(change_length(init_positions[i], params["NETWORK_SIZE"]/params["LAYERS"]), 0., false)) for i in 1:params["DATA_INPUT_SIZE"]] # InputNode(Position(hns + rand(Uniform(0, 1))*hns, hns + rand(Uniform(0, 1))*hns)
+    out_nodes = [AllCell(OutputNode(change_length(init_positions[params["DATA_INPUT_SIZE"]+i], params["NETWORK_SIZE"]), 0., false)) for i in 1:params["DATA_OUTPUT_SIZE"]] # Position(-hns + rand(Uniform(-1, 0))*hns, -hns + rand(Uniform(-1, 0))*hns)
+
+    for l in 2:params["LAYERS"]-1
+
+        # get init_positions indecies for each component type
+
+        init_positions[n_i] = change_length(init_positions[i], (params["NETWORK_SIZE"]/params["LAYERS"])*l)
+        init_positions[den_i] = change_length(init_positions[den_i], (params["NETWORK_SIZE"]/params["LAYERS"])*l-1)
+        init_positions[ap_i] = change_length(init_positions[ap_i], (params["NETWORK_SIZE"]/params["LAYERS"])*l+1)
+    end
+
+    for i in 1:num_priors+num_post:num_neurons*(num_priors+num_post)
+        cn = add_neuron!(NN, init_pos[n])
+
+        for i in 1:num_priors
+            add_dendrite!(NN, cn, init_pos[n+i])
+        end
+        for j in 1:num_post
+            add_axon_point!(NN, cn, init_pos[n+num_priors+j])
+        end
+    end
 
     populate_network!(nn, params["INIT_NUM_NEURONS"], params["INIT_PRIORS"], params["INIT_POSTERIORS"], init_positions[params["DATA_INPUT_SIZE"]+params["DATA_OUTPUT_SIZE"]:end])
     nn.IO_components = [input_nodes..., out_nodes...]
@@ -209,7 +231,7 @@ end
 
 
 function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterations::Integer, parallel_networks::Integer, env, env_version, params::Dict)
-    env = OpenAIGym.GymEnv(env, env_version)
+    env = GymEnv(env, env_version)
     action_index = [i for i in 1:length(env.actions)]
     action_space = one(action_index * action_index')
 
@@ -238,7 +260,7 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
                 else
                     println("$(n) sample dna normal")
                     net_distro = softmax([bn[1]/mean([i[1] for i in best_nets_buf]) for bn in best_nets_buf])
-                    net_params = Distributions.sample(Random.GLOBAL_RNG, best_nets_buf, StatsBase.Weights(net_distro))[2]
+                    net_params = sample(Random.GLOBAL_RNG, best_nets_buf, StatsBase.Weights(net_distro))[2]
                     dna_stack, x = sample_from_set_scaled(net_params, params)
                 end
             else
@@ -253,7 +275,7 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
                 else
                     println("$(n) sample position normal")
                     pos_distro = softmax([bp[1]/mean([i[1] for i in best_init_pos]) for bp in best_init_pos])
-                    pos_params = Distributions.sample(Random.GLOBAL_RNG, best_init_pos, StatsBase.Weights(pos_distro))[2]
+                    pos_params = sample(Random.GLOBAL_RNG, best_init_pos, StatsBase.Weights(pos_distro))[2]
                     init_positions, p = sample_init_positions_from_set(pos_params, params)
                 end
             else
@@ -271,16 +293,16 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
 
             # training
             for ee in 1:env_episodes
-                s = OpenAIGym.reset!(env)
+                s = reset!(env)
 
                 # reset_network_components!(net)
 
                 for i in 1:iterations
                     # for Acrobot
-                    state = Array(s)
+                    s = Array(s)
                     state = [s[1]>0,s[1]<0, s[2]>0,s[2]<0, s[3]>0,s[3]<0]# [(s[2] > 0), (s[2] < 0), (s[4] > 0), (s[4] < 0)]
 
-                    for _ in 1:3
+                    for _ in 1:2
                         den_sinks, den_surges, ap_sinks, ap_surges = value_step!(net, state)
                         state_step!(net, den_sinks, den_surges, ap_sinks, ap_surges)
                         clean_network_components!(net)
@@ -290,13 +312,13 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
                     I += 1
 
 
-                    if I % 100 == 0
+                    if I % 50 == 0
                         if !all([inn.referenced for inn in get_input_nodes(net)]) && get_all_neurons(net) != []
-                            net.total_fitness -= 500
+                            net.total_fitness -= 1000
                             # add_dendrite!(net, rand(get_all_neurons(net)))
                         end
                         if !all([onn.referenced for onn in get_output_nodes(net)]) && get_all_neurons(net) != []
-                            net.total_fitness -= 500
+                            net.total_fitness -= 1000
                             # add_axon_point!(net, rand(get_all_neurons(net)))
                         end
                     end
@@ -305,21 +327,23 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
 
                     out = [on.value for on in get_output_nodes(net)]
                     a = action_space[argmax(out)]
-                    r, s = OpenAIGym.step!(env, a)
+                    r, s = step!(env, a)
 
-                    net.total_fitness += r
-                    sum_env_rewards += r
-                    # if r > 0
-                    # else
-                    #     net.total_fitness += 0
-                    # end
-
-                    if env.done
-                        break
+                    if to_degree(s[3]) >= -12 && to_degree(s[3]) <= 12
+                        net.total_fitness += 1
+                        sum_env_rewards += 1
                     end
+                    if s[1] >= 1 || s[1] <= -1
+                        net.total_fitness -= 1
+                        sum_env_rewards -= 1
+                    end
+
+                    # if env.done
+                    #     break
+                    # end
                 end
             end
-
+            close(env)
             # println("net: $n --- time: $(time()-t)")
             # println("#neurons     -- $(net.n_counter)")
             # println("#dendrites   -- $(net.den_counter)")
@@ -367,7 +391,7 @@ end
 
 
 function unsupervised_test(sample, init_positions, episodes::Integer, iterations::Integer, env, env_version, params::Dict, render)
-    env = OpenAIGym.GymEnv(env, env_version)
+    env = GymEnv(env, env_version)
     action_index = [i for i in 1:length(env.actions)]
     action_space = one(action_index * action_index')
 
@@ -380,7 +404,7 @@ function unsupervised_test(sample, init_positions, episodes::Integer, iterations
     metrics = Dict()
 
     for e in 1:episodes
-        s = OpenAIGym.reset!(env)
+        s = reset!(env)
         # reset_network_components!(net)
 
         for i in 1:iterations
@@ -424,15 +448,17 @@ function unsupervised_test(sample, init_positions, episodes::Integer, iterations
 
             out = [on.value for on in get_output_nodes(net)]
             a = action_space[argmax(out)]
-            r, s = OpenAIGym.step!(env, a)
+            r, s = step!(env, a)
 
             if render
-                OpenAIGym.render(env)
+                render(env)
             end
             if env.done
                 break
             end
         end
     end
+
+    close(env)
     return metrics
 end
