@@ -1,95 +1,120 @@
-include(".\\..\\..\\global_utility_functions\\activation_functions.jl")
 
-using OpenAIGym
-using Distributions
-import Random
-import StatsBase
-
-to_degree(x) = x*180/π
 
 # FUNCTIONS
-function initialize(dna_stack, input_node_positions, output_node_positions, init_positions, params)
+function initialize(dna_stack, init_positions, params)
     nn = initialize_network(
                 params["NETWORK_SIZE"],
                 params["GLOBAL_STDV"],
-                params["NEURON_LIFETIME"],
-                params["SYNAPTIC_LIFETIME"],
-                params["DENDRITE_LIFETIME"],
-                params["AXONPOINT_LIFETIME"],
+                # params["NEURON_LIFETIME"],
+                # params["SYNAPTIC_LIFETIME"],
+                # params["DENDRITE_LIFETIME"],
+                # params["AXONPOINT_LIFETIME"],
                 params["MIN_FUSE_DISTANCE"],
                 params["AP_SINK_ATTRACTIVE_FORCE"],
                 params["AP_SURGE_REPULSIVE_FORCE"],
                 params["DEN_SURGE_REPULSIVE_FORCE"],
                 params["INPUT_ATTRACTIVE_FORCE"],
                 params["OUTPUT_ATTRACTIVE_FORCE"],
-                params["NEURON_REPEL_FORCE"],
+                # params["NEURON_REPEL_FORCE"],
                 params["MAX_NT_STRENGTH"],
                 params["MAX_NEURON_THRESHOLD"],
                 params["MAX_SYNAPTIC_THRESHOLD"],
-                params["LITE_LIFE_DECAY"],
-                params["HEAVY_LIFE_DECAY"],
+                # params["LIFE_DECAY"],
                 params["NT_RETAIN_PERCENTAGE"],
-                params["N_AP_DEN_INIT_RANGE"],
-                params["NEURON_INIT_INTERVAL"],
-                params["AP_DEN_INIT_INTERVAL"],
+                # params["NEURON_INIT_INTERVAL"],
+                # params["AP_DEN_INIT_INTERVAL"],
                 params["MAX_NUM_PRIORS"],
                 params["MAX_NUM_POSTERIORS"],
                 params["NEURON_DESTRUCTION_THRESHOLD"],
                 params["SYNAPS_DESTRUCTION_THRESHOLD"],
                 dna_stack)
 
-    input_nodes = [AllCell(InputNode(change_length(init_positions[i], params["NETWORK_SIZE"]/params["LAYERS"]), 0., false)) for i in 1:params["DATA_INPUT_SIZE"]] # InputNode(Position(hns + rand(Uniform(0, 1))*hns, hns + rand(Uniform(0, 1))*hns)
-    out_nodes = [AllCell(OutputNode(change_length(init_positions[params["DATA_INPUT_SIZE"]+i], params["NETWORK_SIZE"]), 0., false)) for i in 1:params["DATA_OUTPUT_SIZE"]] # Position(-hns + rand(Uniform(-1, 0))*hns, -hns + rand(Uniform(-1, 0))*hns)
-
-    for l in 2:params["LAYERS"]-1
-
-        # get init_positions indecies for each component type
-
-        init_positions[n_i] = change_length(init_positions[i], (params["NETWORK_SIZE"]/params["LAYERS"])*l)
-        init_positions[den_i] = change_length(init_positions[den_i], (params["NETWORK_SIZE"]/params["LAYERS"])*l-1)
-        init_positions[ap_i] = change_length(init_positions[ap_i], (params["NETWORK_SIZE"]/params["LAYERS"])*l+1)
+    if length(params["LAYERS"]) % 2 != 0
+        throw("Layers have to be even in number")
     end
 
-    for i in 1:num_priors+num_post:num_neurons*(num_priors+num_post)
-        cn = add_neuron!(NN, init_pos[n])
+    num_pr = params["INIT_POSTERIORS"]
+    num_po = params["INIT_PRIORS"]
+    ns = params["NETWORK_SIZE"]
+    n_per_l = params["LAYERS"][2:end-1]
+    is = params["LAYERS"][1]
+    os = params["LAYERS"][end]
+    lays = length(n_per_l) # basically #neuron_layers + #connection_layers
 
-        for i in 1:num_priors
-            add_dendrite!(NN, cn, init_pos[n+i])
+    I = 1
+    for i in I:is
+        append!(nn.IO_components, [AllCell(InputNode(1, init_positions[i], 0., false))])
+    end
+    I += is
+    for i in I:I+os
+        append!(nn.IO_components, [AllCell(OutputNode(lays*2, init_positions[is+i], 0., false))])
+    end
+    I += os
+
+    # println(length(init_positions))
+
+    # num_neurons = 7
+    # num_connections = 6
+    # num_layers = 7+6+2
+    # [inp, n, c, n, c, n, c, n, out]
+
+    for l in 2:2:lays+1
+        num_n = n_per_l[Integer(1+ceil(l/2))]
+
+        for i in I:1+num_pr+num_po:I+num_n+(num_n * num_pr)+(num_n * num_po)
+            n = add_neuron!(nn, l, init_positions[i])
+
+            for j in 1:num_pr
+                add_dendrite!(nn, n, l-1, init_positions[i+j])
+            end
+            for k in 1:num_po
+                add_axon_point!(nn, n, l+1, init_positions[i+num_pr+k])
+            end
         end
-        for j in 1:num_post
-            add_axon_point!(NN, cn, init_pos[n+num_priors+j])
-        end
+        I += n_per_l[l] + (n_per_l[l]*num_pr) + (n_per_l[l]*num_po)
     end
 
-    populate_network!(nn, params["INIT_NUM_NEURONS"], params["INIT_PRIORS"], params["INIT_POSTERIORS"], init_positions[params["DATA_INPUT_SIZE"]+params["DATA_OUTPUT_SIZE"]:end])
-    nn.IO_components = [input_nodes..., out_nodes...]
+    # # populate network with segmentation [input positions, output positions, neuron positions, dendrite positions, axon point positions]
+    # for dpi in is+os+i_nn:i_nn:is+os+i_nn+(i_nden*i_nn)
+    #     for (i, n) in enumerate(get_all_neurons(nn))
+    #         add_dendrite!(nn, n, init_positions[dpi+i])
+    #     end
+    # end
+    # for appi in is+os+i_nn+(i_nden*i_nn):i_nn:is+os+i_nn+(i_nden*i_nn)+(i_nap*i_nn)-1
+    #     for (i, n) in enumerate(get_all_neurons(nn))
+    #         add_axon_point!(nn, n, init_positions[appi+i])
+    #     end
+    # end
+    # nn.IO_components = [input_nodes..., out_nodes...]
+
     return nn
 end
 
 
 
 
-function get_positions(x, params)
-    inn = params["INIT_NUM_NEURONS"] * (params["INIT_PRIORS"] + params["INIT_POSTERIORS"]) + params["DATA_INPUT_SIZE"] + params["DATA_OUTPUT_SIZE"]
+function get_positions(x, p)
+    inn = p["LAYERS"][1] + p["LAYERS"][end] + sum(p["LAYERS"][2:end-1]) + (sum(p["LAYERS"][2:end-1]) * p["INIT_PRIORS"]) + (sum(p["LAYERS"][2:end-1]) * p["INIT_POSTERIORS"])
+    # inn = sum(params["LAYERS"][2:end-1]) + (sum(params["LAYERS"][2:end-1]) * params["INIT_PRIORS"]) + (sum(params["LAYERS"][2:end-1]) * params["INIT_POSTERIORS"])
     ps = []
     for ip in 1:2:inn*2
         append!(ps, [Position(x[ip:ip+1]...)])
     end
     return ps
 end
-function sample_init_positions_from_set(x, params)
-    inn = params["INIT_NUM_NEURONS"] * (params["INIT_PRIORS"] + params["INIT_POSTERIORS"]) + params["DATA_INPUT_SIZE"] + params["DATA_OUTPUT_SIZE"]
-    ns = params["NETWORK_SIZE"]
+function sample_init_positions_from_set(x, p)
+    inn = p["LAYERS"][1] + p["LAYERS"][end] + sum(p["LAYERS"][2:end-1]) + (sum(p["LAYERS"][2:end-1]) * p["INIT_PRIORS"]) + (sum(p["LAYERS"][2:end-1]) * p["INIT_POSTERIORS"])
+    ns = p["NETWORK_SIZE"]
     ps = []
-    xx = [clamp(rand(Normal(ax, params["INIT_POSITION_STDV"])), -ns, ns) for ax in x]
+    xx = [clamp(rand(Distributions.Normal(ax, p["INIT_POSITION_STDV"])), -ns, ns) for ax in x]
     for ip in 1:2:inn*2
         append!(ps, [Position(xx[ip:ip+1]...)])
     end
     return ps, xx
 end
-function sample_init_positions_from_sets_random(sets, params)
-    inn = params["INIT_NUM_NEURONS"] * (params["INIT_PRIORS"] + params["INIT_POSTERIORS"]) + params["DATA_INPUT_SIZE"] + params["DATA_OUTPUT_SIZE"]
-    ns = params["NETWORK_SIZE"]
+function sample_init_positions_from_sets_random(sets, p)
+    inn = p["LAYERS"][1] + p["LAYERS"][end] + sum(p["LAYERS"][2:end-1]) + (sum(p["LAYERS"][2:end-1]) * p["INIT_PRIORS"]) + (sum(p["LAYERS"][2:end-1]) * p["INIT_POSTERIORS"])
+    ns = p["NETWORK_SIZE"]
     ps = []
     xx = []
     for ip in 1:2:inn*2
@@ -99,9 +124,9 @@ function sample_init_positions_from_sets_random(sets, params)
     end
     return ps, xx
 end
-function get_random_init_positions(params)
-    inn = params["INIT_NUM_NEURONS"] * (params["INIT_PRIORS"] + params["INIT_POSTERIORS"]) + params["DATA_INPUT_SIZE"] + params["DATA_OUTPUT_SIZE"]
-    ns = params["NETWORK_SIZE"]
+function get_random_init_positions(p)
+    inn = p["LAYERS"][1] + p["LAYERS"][end] + sum(p["LAYERS"][2:end-1]) + (sum(p["LAYERS"][2:end-1]) * p["INIT_PRIORS"]) + (sum(p["LAYERS"][2:end-1]) * p["INIT_POSTERIORS"])
+    ns = p["NETWORK_SIZE"]
     ps = []
     x = [rand(Uniform(-ns, ns)) for p in 1:inn*2]
     for ip in 1:2:inn*2
@@ -129,13 +154,11 @@ function sample_from_set_plain(x, p)
     d = p["DNA_SAMPLE_SIZE"] # because shorter indexing
     stdv = p["GLOBAL_STDV"]
 
-    nt_init_strs = [rand(Normal(x[i]), stdv) for i in 1:d]
-
-    syn_thr   = [rand(Normal(x[i]), stdv) for i in d+1:(d*2)]
-    syn_r_rec = [rand(Normal(x[i]), stdv) for i in (d*2)+1:(d*3)]
-    syn_maxR  = [rand(Normal(x[i]), stdv) for i in (d*3)+1:(d*4)]
-
-    n_thr  = [rand(Normal(x[i]), stdv) for i in (d*4)+1:(d*5)]
+    nt_init_strs = [rand(Distributions.Normal(x[i]), stdv) for i in 1:d]
+    syn_thr   = [rand(Distributions.Normal(x[i]), stdv) for i in d+1:(d*2)]
+    syn_r_rec = [rand(Distributions.Normal(x[i]), stdv) for i in (d*2)+1:(d*3)]
+    syn_maxR  = [rand(Distributions.Normal(x[i]), stdv) for i in (d*3)+1:(d*4)]
+    n_thr  = [rand(Distributions.Normal(x[i]), stdv) for i in (d*4)+1:(d*5)]
 
     xx = [nt_init_strs..., syn_thr..., syn_r_rec..., syn_maxR..., n_thr...]
 
@@ -153,11 +176,9 @@ function get_random_set(p)
     d = p["DNA_SAMPLE_SIZE"] # because shorter indexing
 
     nt_init_strs = [rand(Uniform(0.1, p["MAX_NT_STRENGTH"])) for i in 1:d]
-
     syn_thr   = [rand(Uniform(0.5, p["MAX_SYNAPTIC_THRESHOLD"])) for i in d+1:(d*2)]
     syn_r_rec = [rand(Uniform(1.1, 100.)) for i in (d*2)+1:(d*3)]
     syn_maxR  = [rand(Uniform(1., p["MAX_RESISTANCE"])) for i in (d*3)+1:(d*4)]
-
     n_thr  = [rand(Uniform(0.5, p["MAX_SYNAPTIC_THRESHOLD"])) for i in (d*4)+1:(d*5)]
 
     xx = [nt_init_strs..., syn_thr..., syn_r_rec..., syn_maxR..., n_thr...]
@@ -176,14 +197,11 @@ function sample_from_set_scaled(x, p; scl=1.)
     d = p["DNA_SAMPLE_SIZE"] # because shorter indexing
     stdv = p["GLOBAL_STDV"]
 
-    nt_init_strs = [rand(Normal(x[i], stdv * scl * 0.4)) for i in 1:d]
-
-    syn_thr   = [rand(Normal(x[i], stdv * scl * 0.4)) for i in d+1:(d*2)]
-    syn_r_rec = [rand(Normal(x[i], stdv * scl * 0.4)) for i in (d*2)+1:(d*3)]
-    syn_maxR  = [rand(Normal(x[i], stdv * scl * 2)) for i in (d*3)+1:(d*4)]
-
-    n_thr  = [rand(Normal(x[i], stdv * scl * 0.4)) for i in (d*4)+1:(d*5)]
-
+    nt_init_strs = [rand(Distributions.Normal(x[i], stdv * scl * 0.4)) for i in 1:d]
+    syn_thr   = [rand(Distributions.Normal(x[i], stdv * scl * 0.4)) for i in d+1:(d*2)]
+    syn_r_rec = [rand(Distributions.Normal(x[i], stdv * scl * 0.4)) for i in (d*2)+1:(d*3)]
+    syn_maxR  = [rand(Distributions.Normal(x[i], stdv * scl * 2)) for i in (d*3)+1:(d*4)]
+    n_thr  = [rand(Distributions.Normal(x[i], stdv * scl * 0.4)) for i in (d*4)+1:(d*5)]
 
     xx = [nt_init_strs..., syn_thr..., syn_r_rec..., syn_maxR..., n_thr...]
 
@@ -202,13 +220,10 @@ function sample_from_sets_random(sets, p)
     stdv = p["GLOBAL_STDV"]
 
     nt_init_strs = [rand(sets)[i] for i in 1:d]
-
     syn_thr   = [rand(sets)[i] for i in d+1:(d*2)]
     syn_r_rec = [rand(sets)[i] for i in (d*2)+1:(d*3)]
     syn_maxR  = [rand(sets)[i] for i in (d*3)+1:(d*4)]
-
     n_thr  = [rand(sets)[i] for i in (d*4)+1:(d*5)]
-
 
     xx = [nt_init_strs..., syn_thr..., syn_r_rec..., syn_maxR..., n_thr...]
 
@@ -260,7 +275,7 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
                 else
                     println("$(n) sample dna normal")
                     net_distro = softmax([bn[1]/mean([i[1] for i in best_nets_buf]) for bn in best_nets_buf])
-                    net_params = sample(Random.GLOBAL_RNG, best_nets_buf, StatsBase.Weights(net_distro))[2]
+                    net_params = sample(Random.GLOBAL_RNG, best_nets_buf, Weights(net_distro))[2]
                     dna_stack, x = sample_from_set_scaled(net_params, params)
                 end
             else
@@ -275,7 +290,7 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
                 else
                     println("$(n) sample position normal")
                     pos_distro = softmax([bp[1]/mean([i[1] for i in best_init_pos]) for bp in best_init_pos])
-                    pos_params = sample(Random.GLOBAL_RNG, best_init_pos, StatsBase.Weights(pos_distro))[2]
+                    pos_params = sample(Random.GLOBAL_RNG, best_init_pos, Weights(pos_distro))[2]
                     init_positions, p = sample_init_positions_from_set(pos_params, params)
                 end
             else
@@ -305,7 +320,7 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
                     for _ in 1:2
                         den_sinks, den_surges, ap_sinks, ap_surges = value_step!(net, state)
                         state_step!(net, den_sinks, den_surges, ap_sinks, ap_surges)
-                        clean_network_components!(net)
+                        clean_network_components!(net, length(params["LAYERS"]))
                         # runtime_instantiate_components!(net, I)
                     end
 
@@ -415,8 +430,8 @@ function unsupervised_test(sample, init_positions, episodes::Integer, iterations
 
             den_sinks, den_surges, ap_sinks, ap_surges = value_step!(net, state)
             state_step!(net, den_sinks, den_surges, ap_sinks, ap_surges)
-            clean_network_components!(net)
-            runtime_instantiate_components!(net, I)
+            clean_network_components!(net, length(params["LAYERS"]))
+            # runtime_instantiate_components!(net, I)
             I += 1
 
             positions, connections = get_all_relations(net) # returns [np, app, denp, synp, inp, outp], connections
@@ -431,17 +446,17 @@ function unsupervised_test(sample, init_positions, episodes::Integer, iterations
                 metrics["episode_$(e)_connections"] = [connections]
             end
 
-
-            if I % 100 == 0
-                if !all([inn.referenced for inn in get_input_nodes(net)]) && get_all_neurons(net) != []
-                    net.total_fitness -= 5000
-                    # add_dendrite!(net, rand(get_all_neurons(net)))
-                end
-                if !all([onn.referenced for onn in get_output_nodes(net)]) && get_all_neurons(net) != []
-                    net.total_fitness -= 5000
-                    # add_axon_point!(net, rand(get_all_neurons(net)))
-                end
-            end
+            #
+            # if I % 100 == 0
+            #     if !all([inn.referenced for inn in get_input_nodes(net)]) && get_all_neurons(net) != []
+            #         net.total_fitness -= 5000
+            #         # add_dendrite!(net, rand(get_all_neurons(net)))
+            #     end
+            #     if !all([onn.referenced for onn in get_output_nodes(net)]) && get_all_neurons(net) != []
+            #         net.total_fitness -= 5000
+            #         # add_axon_point!(net, rand(get_all_neurons(net)))
+            #     end
+            # end
 
 
 

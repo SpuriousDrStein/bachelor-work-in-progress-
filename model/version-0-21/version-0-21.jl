@@ -2,14 +2,15 @@ include("structure.jl")
 include("functions.jl")
 
 # NETWORK HP's
-init_params =   Dict("NETWORK_SIZE"                 => FloatN(12),
-                "LAYERS"                            => 10,
+init_params =   Dict("NETWORK_SIZE"                 => FloatN(30),
                 "GLOBAL_STDV"                       => FloatN(0.5),
                 "INIT_POSITION_STDV"                => FloatN(2),
-                "NEURON_LIFETIME"                   => FloatN(100000),
-                "SYNAPTIC_LIFETIME"                 => FloatN(100000),
-                "DENDRITE_LIFETIME"                 => FloatN(100000),
-                "AXONPOINT_LIFETIME"                => FloatN(100000),
+                # "NEURON_LIFETIME"                   => FloatN(100000),
+                # "SYNAPTIC_LIFETIME"                 => FloatN(100000),
+                # "DENDRITE_LIFETIME"                 => FloatN(100000),
+                # "AXONPOINT_LIFETIME"                => FloatN(100000),
+                # "NEURON_REPEL_FORCE"                => FloatN(0),
+                # "LIFE_DECAY"                        => FloatN(1.),
                 "MIN_FUSE_DISTANCE"                 => FloatN(0.3),
                 "AP_SINK_ATTRACTIVE_FORCE"          => FloatN(0.4), # force:    AxonPoint's -> ap_sinks
                 "DEN_SURGE_REPULSIVE_FORCE"         => FloatN(0.003), # repulsive force of den/occupied input -> den
@@ -18,29 +19,26 @@ init_params =   Dict("NETWORK_SIZE"                 => FloatN(12),
                 "OUTPUT_ATTRACTIVE_FORCE"           => FloatN(6),
                 "MAX_SYNAPTIC_THRESHOLD"            => FloatN(4),
                 "MAX_NEURON_THRESHOLD"              => FloatN(6),
-                "NEURON_REPEL_FORCE"                => FloatN(0),
-                "LITE_LIFE_DECAY"                   => FloatN(1.),
-                "HEAVY_LIFE_DECAY"                  => FloatN(1.),
                 "NEURON_DESTRUCTION_THRESHOLD"      => FloatN(0.1),
                 "SYNAPS_DESTRUCTION_THRESHOLD"      => FloatN(0.05),
                 "MAX_NT_STRENGTH"                   => FloatN(1.5),
                 "NT_RETAIN_PERCENTAGE"              => FloatN(0.8),
                 "MAX_RESISTANCE"                    => FloatN(1.6),
-                "N_AP_DEN_INIT_RANGE"               => FloatN(0.2),
                 "MAX_NUM_PRIORS"                    => 5,
                 "MAX_NUM_POSTERIORS"                => 5,
-                "INIT_NUM_NEURONS"                  => 10,
                 "INIT_PRIORS"                       => 2,
                 "INIT_POSTERIORS"                   => 2,
-                "NEURON_INIT_INTERVAL"              => 10000,
-                "AP_DEN_INIT_INTERVAL"              => 5000, # a minimum to negate the possibility of calling the add_dendrite or add_axon_point function every timestep
+                "LAYERS"                            => [6,4,5,2], # #layer = length
+                # "NEURON_INIT_INTERVAL"              => 10000,
+                # "AP_DEN_INIT_INTERVAL"              => 5000, # a minimum to negate the possibility of calling the add_dendrite or add_axon_point function every timestep
                 "TOP_BUFFER_LENGTH"                 => 10,
-                "DNA_SAMPLE_SIZE"                   => 2,
-                "DATA_INPUT_SIZE"                   => 6,
-                "DATA_OUTPUT_SIZE"                  => 2)
+                "DNA_SAMPLE_SIZE"                   => 2)
+                # "DATA_INPUT_SIZE"                   => 6,
+                # "DATA_OUTPUT_SIZE"                  => 2)
 
+6+2+4+(4*2)+(5*2)
 
-net_episodes = 150
+net_episodes = 10
 env_episodes = 200
 iterations = 30
 parallel_networks = 6
@@ -51,15 +49,11 @@ v = :v1
 
 best_dna, best_init_pos, metrics = unsupervised_train(net_episodes, env_episodes, iterations, parallel_networks, env, v, init_params)
 
-
 println("execution time = ", sum(sum(metrics["net_$(n)_execution_time"] for n in 1:parallel_networks))/60, " minutes")
 
-
-best_init_pos[9][2]
-
-ind = 9; metrics2 = unsupervised_test(sort(best_dna)[ind][2], sort(best_init_pos)[ind][2], test_episodes, iterations, env, v, init_params, false)
-for j in 1:1
-    for i in 1:1 #length(metrics2["episode_$(j)_positions"])
+ind = 6; metrics2 = unsupervised_test(sort(best_dna)[ind][2], sort(best_init_pos)[ind][2], test_episodes, iterations, env, v, init_params, false)
+for j in 1:20
+    for i in 1:length(metrics2["episode_$(j)_positions"])
         t_p = metrics2["episode_$(j)_positions"][i]
         t_c = metrics2["episode_$(j)_connections"][i]
         display_timestep(t_p, t_c, init_params, j, i)

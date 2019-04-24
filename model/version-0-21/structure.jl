@@ -5,10 +5,12 @@ mutable struct Position
     y::FloatN
 end
 mutable struct Surge
+    layer::Integer
     position::Position
     strength::FloatN
 end
 mutable struct Sink
+    layer::Integer
     position::Position
     strength::FloatN
 end
@@ -36,11 +38,13 @@ end
 
 # NETWORK STRUCTURES
 mutable struct InputNode
+    layer::Integer
     position::Position
     value::FloatN
     referenced::Bool
 end
 mutable struct OutputNode
+    layer::Integer
     position::Position
     value::FloatN
     referenced::Bool
@@ -50,21 +54,24 @@ mutable struct NeuroTransmitter # small possitive or small negative
 end
 mutable struct Dendrite
     # constants
-    lifeTime::FloatN
+    # lifeTime::FloatN
+    layer::Integer
 
     # change at t
     position::Position
 end
 mutable struct AxonPoint
     # constants
-    lifeTime::FloatN
+    # lifeTime::FloatN
+    layer::Integer
 
     # change at t
     position::Position
 end
 mutable struct Synaps
     # constants
-    lifeTime::FloatN
+    # lifeTime::FloatN
+    layer::Integer
 
     # change at t
     position::Position
@@ -84,12 +91,13 @@ mutable struct AllCell
 end
 mutable struct Neuron
     # constants
-    den_init_interval::Integer
-    ap_init_interval::Integer
+    # den_init_interval::Integer
+    # ap_init_interval::Integer
+    layer::Integer
 
     # change at t
     position::Position
-    lifeTime::FloatN
+    # lifeTime::FloatN
     Q::FloatN
     THR::FloatN
 
@@ -108,26 +116,24 @@ mutable struct Network
     # constants
     size::FloatN
     global_stdv::FloatN
-    neuron_lifetime::FloatN
-    synaps_lifetime::FloatN
-    dendrite_lifetime::FloatN
-    axon_point_lifetime::FloatN
+    # neuron_lifetime::FloatN
+    # synaps_lifetime::FloatN
+    # dendrite_lifetime::FloatN
+    # axon_point_lifetime::FloatN
     min_fuse_distance::FloatN
     ap_sink_attractive_force::FloatN # force: AxonPoint's -> ap_sinks
     ap_surge_repulsive_force::FloatN
     den_surge_repulsive_force::FloatN
     input_attraction_force::FloatN
     output_attraction_force::FloatN
-    neuron_repel_force::FloatN
+    # neuron_repel_force::FloatN
     max_nt_strength::FloatN
     max_n_threshold::FloatN
     max_s_threshold::FloatN
-    lite_life_decay::FloatN
-    heavy_life_decay::FloatN
+    # life_decay::FloatN
     nt_retain_percentage::FloatN
-    den_and_ap_init_range::FloatN
-    neuron_init_interval::Integer
-    ap_den_init_interval::Integer
+    # neuron_init_interval::Integer
+    # ap_den_init_interval::Integer
     max_num_priors::Integer
     max_num_posteriors::Integer
     dna_stack::DNAStack

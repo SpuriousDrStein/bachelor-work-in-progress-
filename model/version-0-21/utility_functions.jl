@@ -1,29 +1,30 @@
 # BASIC
-has_empty_prior(N::Neuron) = any([ismissing(p) for p in N.priors])
-has_empty_post(N::Neuron) = any([ismissing(p) for p in N.posteriors])
+to_degree(x) = x*180/π
+
 
 # QUERY FUNCTIONS
 get_dendrites(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == Dendrite]
 get_axon_points(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == AxonPoint]
 get_synapses(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == Synaps]
-get_input_nodes(NN::Network) = [n.cell for n in NN.IO_components if typeof(n.cell) == InputNode]
-get_output_nodes(NN::Network) = [n.cell for n in NN.IO_components if typeof(n.cell) == OutputNode]
 get_input_nodes(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == InputNode]
 get_output_nodes(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == OutputNode]
-
 
 get_dendrites_in_all(x::Array{AllCell}) = [n for n in x if typeof(n.cell) == Dendrite]
 get_axon_points_in_all(x::Array{AllCell}) = [n for n in x if typeof(n.cell) == AxonPoint]
 get_synapses_in_all(x::Array{AllCell}) = [n for n in x if typeof(n.cell) == Synaps]
-get_input_nodes_in_all(NN::Network) = [n for n in NN.IO_components if typeof(n.cell) == InputNode]
-get_output_nodes_in_all(NN::Network) = [n for n in NN.IO_components if typeof(n.cell) == OutputNode]
 
 get_activatable_synapses(x::Array{Synaps}) = [s for s in x if s.Q >= s.THR]
 
 get_all_all_cells(NN::Network) = [n for n in NN.components if typeof(n) == AllCell] #..., NN.IO_components...]
 get_all_neurons(NN::Network) = [n for n in NN.components if typeof(n) == Neuron]
 get_all_neuron_indecies(NN::Network) = [i for i in 1:length(NN.components)][typeof.(NN.components) .== Neuron]
+get_input_nodes(NN::Network) = [n.cell for n in NN.IO_components if typeof(n.cell) == InputNode]
+get_output_nodes(NN::Network) = [n.cell for n in NN.IO_components if typeof(n.cell) == OutputNode]
+get_input_nodes_in_all(NN::Network) = [n for n in NN.IO_components if typeof(n.cell) == InputNode]
+get_output_nodes_in_all(NN::Network) = [n for n in NN.IO_components if typeof(n.cell) == OutputNode]
 
+has_empty_prior(N::Neuron) = any([ismissing(p) for p in N.priors])
+has_empty_post(N::Neuron) = any([ismissing(p) for p in N.posteriors])
 get_prior_all_cells(N::Neuron) = [n for n in skipmissing(N.priors) if typeof(n) == AllCell]
 get_posterior_all_cells(N::Neuron) = [n for n in skipmissing(N.posteriors) if typeof(n) == AllCell]
 
@@ -48,17 +49,13 @@ function tally_up_fitness!(NN::Network)
     end
 end
 
-
-# SPATIAL FUNCTIONS
 direction(from::Position, to::Position) = [to.x, to.y] .- [from.x, from.y]
 distance(p1::Position, p2::Position) = sqrt(sum(direction(p1, p2).^2))
 vector_length(p::Position) = sqrt(sum([p.x, p.y].^2))
 vector_length(v::Vector) = sqrt(sum(v.^2))
-normalize(p::Position) = [p.x, p.y] ./ vector_length(p)
-normalize(v::Vector) = v ./ vector_length(v)
 
 function get_random_position(range)
-    return Position(rand(Uniform(-range, range)), rand(Uniform(-range, range)))
+    return Position(rand(Distributions.Uniform(-range, range)), rand(Distributions.Uniform(-range, range)))
 end
 
 function change_length(position::Position, length)
@@ -105,31 +102,38 @@ function get_all_relations(NN::Network)
     end
 end
 
+function rectify_position(p::Position, nn_size::FloatN)
+    if distance(p, Position(0,0)) > nn_size
+        return Position((normalize(p) * nn_size)...)
+    else
+        return p
+    end
+end
+
 
 # INITIALIZATION SAMPELING
 function initialize_network(
                 net_size::FloatN,
                 global_stdv::FloatN,
-                nlife::FloatN,
-                slife::FloatN,
-                dlife::FloatN,
-                aplife::FloatN,
+                # nlife::FloatN,
+                # slife::FloatN,
+                # dlife::FloatN,
+                # aplife::FloatN,
                 min_fuse_distance::FloatN,
                 ap_sink_attractive_force::FloatN,
                 ap_surge_repulsive_force::FloatN,
                 den_surge_repulsive_force::FloatN,
                 in_attractive_force::FloatN,
                 out_attractive_force::FloatN,
-                nrf::FloatN,
+                # nrf::FloatN,
                 max_nt_strength::FloatN,
                 max_n_threshold::FloatN,
                 max_s_threshold::FloatN,
-                light_life_decay::FloatN,
-                heavy_life_decay::FloatN,
+                # life_decay::FloatN,
                 nt_retain_percentage::FloatN,
-                den_and_ap_init_range::FloatN,
-                neuron_init_interval::Integer,
-                ap_den_init_interval::Integer,
+                # den_and_ap_init_range::FloatN,
+                # neuron_init_interval::Integer,
+                # ap_den_init_interval::Integer,
                 max_priors::Integer,
                 max_posteriors::Integer,
                 n_dest_thresh::FloatN,
@@ -138,26 +142,24 @@ function initialize_network(
 
     return Network(net_size,
                     global_stdv,
-                    nlife,
-                    slife,
-                    dlife,
-                    aplife,
+                    # nlife,
+                    # slife,
+                    # dlife,
+                    # aplife,
                     min_fuse_distance,
                     ap_sink_attractive_force,
                     ap_surge_repulsive_force,
                     den_surge_repulsive_force,
                     in_attractive_force,
                     out_attractive_force,
-                    nrf,
+                    # nrf,
                     max_nt_strength,
                     max_n_threshold,
                     max_s_threshold,
-                    light_life_decay,
-                    heavy_life_decay,
+                    # life_decay,
                     nt_retain_percentage,
-                    den_and_ap_init_range,
-                    neuron_init_interval,
-                    ap_den_init_interval,
+                    # neuron_init_interval,
+                    # ap_den_init_interval,
                     max_priors,
                     max_posteriors,
                     dna_stack,
@@ -166,39 +168,27 @@ function initialize_network(
                     n_dest_thresh, s_dest_thresh)
 end
 
-import StatsBase.sample
-function sample(mean::FloatN, global_stdv::FloatN)
-    rand(Normal(mean, global_stdv))
-end
-function rectify_position(p::Position, nn_size::FloatN)
-    if distance(p, Position(0,0)) > nn_size
-        return Position((normalize(p) * nn_size)...)
-    else
-        return p
-    end
-end
 function unfold(dna::NeuroTransmitterDNA, NN::Network)::NeuroTransmitter
     str = clamp(dna.init_strength, 0.1, NN.max_nt_strength)
     return NeuroTransmitter(str)
 end
-function unfold(dna::SynapsDNA, pos::Position, NT::NeuroTransmitter, NN::Network)::Synaps
+function unfold(dna::SynapsDNA, layer::Integer, pos::Position, NT::NeuroTransmitter, NN::Network)::Synaps
     thr = clamp(dna.THR, 0.5, NN.max_s_threshold)
     r_rec = max(1.1, dna.r_rec) # 1.1 because at 1 it has to increase
     maxR = max(1., dna.maxR)
 
-    return Synaps(NN.synaps_lifetime, pos, NT, 0, thr, 1, r_rec, maxR, 0, 0, NN.s_destruction_threshold)
+    return Synaps(layer, pos, NT, 0, thr, 1, r_rec, maxR, 0, 0, NN.s_destruction_threshold)
 end
-function unfold(dna::NeuronDNA, pos::Position, NN::Network)::Neuron
+function unfold(dna::NeuronDNA, layer::Integer, pos::Position, NN::Network)::Neuron
     thr = clamp(dna.THR, 0.5, NN.max_n_threshold)
 
-    return Neuron(NN.ap_den_init_interval, NN.ap_den_init_interval,
-                    pos, NN.neuron_lifetime, 0., thr,
-                    [missing for _ in 1:NN.max_num_priors],
+    return Neuron(layer, pos, 0., thr, [missing for _ in 1:NN.max_num_priors],
                     [missing for _ in 1:NN.max_num_posteriors],
                     0., 0., NN.n_destruction_threshold)
 end
 
 
+# RECTIFICATION FUNCTIONS
 function rectify!(dna::NeuroTransmitterDNA, NN::Network)
     a = copy(dna.init_strength)
 
