@@ -58,8 +58,10 @@ function propergate!(N::Neuron, NN::Network, den_sinks::Array, ap_surges::Array)
             if typeof(a.cell) == Synaps
                 a.cell.Q += N.Q/length(post_all)
             elseif typeof(a.cell) == AxonPoint
-                append!(den_sinks, [Sink(copy(a.cell.position), N.Q/length(post_all), a.cell.layer)])
-                append!(ap_surges, [Surge(copy(a.cell.position), NN.ap_surge_repulsive_force, a.cell.layer)])
+                append!(den_sinks, [Sink(a.cell.layer, copy(a.cell.position), N.Q/length(post_all))])
+                append!(ap_surges, [Surge(a.cell.layer, copy(a.cell.position), NN.ap_surge_repulsive_force)])
+            elseif typeof(a.cell) == OutputNode
+                a.cell.value = N.Q/length(post_all)
             end
         end
     else
@@ -75,9 +77,9 @@ function value_step!(NN::Network, input::Array)
 
     dispersion_collection = Dict()
     den_sinks = []
-    den_surges = [Surge(o_n.cell.layer, copy(o_n.cell.position), NN.den_surge_repulsive_force) for o_n in out_nodes]
+    den_surges = [Surge(i_n.cell.layer, copy(i_n.cell.position), NN.ap_surge_repulsive_force) for i_n in in_nodes if i_n.cell.referenced]
     ap_sinks = []
-    ap_surges = [Surge(i_n.cell.layer, copy(i_n.cell.position), NN.ap_surge_repulsive_force) for i_n in in_nodes]
+    ap_surges = [Surge(o_n.cell.layer, copy(o_n.cell.position), NN.den_surge_repulsive_force) for o_n in out_nodes if o_n.cell.referenced]
 
     # if no neurons in network
     if get_all_neurons(NN) == []
@@ -154,25 +156,21 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
                         dir = direction(i_nn.cell.position, ap_sink.position)
 
                         if dir != [0,0]
-                            if vector_length(dir) < NN.size/4
-                                mag = 0
-                            else
-                                mag = NN.min_fuse_distance / vector_length(dir)
-                            end
+                            mag = NN.min_fuse_distance / vector_length(dir)
 
                             total_v .+= normalize(dir) .* mag .* (1 + ap_sink.strength)
                         end
                         div += 1
                     end
                 end
-                for i_nn2 in in_nodes
-                    if i_nn2 !== i_nn
-                        dir = direction(i_nn2.cell.position, i_nn.cell.position)
-                        mag = min(NN.min_fuse_distance/vector_length(dir), NN.min_fuse_distance)
-                        total_v .+= normalize(dir) .* mag
-                        div += 1
-                    end
-                end
+                # for i_nn2 in in_nodes
+                #     if i_nn2 !== i_nn
+                #         dir = direction(i_nn2.cell.position, i_nn.cell.position)
+                #         mag = min(NN.min_fuse_distance/vector_length(dir), NN.min_fuse_distance)
+                #         total_v .+= normalize(dir) .* mag
+                #         div += 1
+                #     end
+                # end
 
                 total_v ./= div
                 i_nn.cell.position += Position(total_v...)
@@ -189,11 +187,7 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
                         dir = direction(o_nn.cell.position, d_sink.position)
 
                         if dir != [0,0]
-                            if vector_length(dir) < NN.size/3
-                                mag = 0
-                            else
-                                mag = NN.min_fuse_distance / vector_length(dir)
-                            end
+                            mag = NN.min_fuse_distance / vector_length(dir)
 
                             total_v .+= normalize(dir) .* mag .* (1 + d_sink.strength)
                         end
@@ -256,7 +250,7 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
 
             for i_n in get_input_nodes_in_all(NN)
                 if i_n.cell.layer == den.cell.layer
-                    if !i_n.cell.referenced && distance(den.cell.position, i_n.cell.position) <= NN.min_fuse_distance
+                    if distance(den.cell.position, i_n.cell.position) <= NN.min_fuse_distance
                         fuse!(i_n, den)
                     end
                 end
@@ -321,7 +315,7 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
             end
             for o_n in get_output_nodes_in_all(NN)
                 if o_n.cell.layer == ap.cell.layer
-                    if !o_n.cell.referenced && distance(ap.cell.position, o_n.cell.position) <= NN.min_fuse_distance
+                    if distance(ap.cell.position, o_n.cell.position) <= NN.min_fuse_distance
                         fuse!(o_n, ap)
                     end
                 end

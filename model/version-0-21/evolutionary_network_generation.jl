@@ -29,9 +29,9 @@ function initialize(dna_stack, init_positions, params)
                 params["SYNAPS_DESTRUCTION_THRESHOLD"],
                 dna_stack)
 
-    if length(params["LAYERS"]) % 2 != 0
-        throw("Layers have to be even in number")
-    end
+    # if length(params["LAYERS"]) % 2 != 0
+    #     throw("Layers have to be even in number")
+    # end
 
     num_pr = params["INIT_POSTERIORS"]
     num_po = params["INIT_PRIORS"]
@@ -43,11 +43,11 @@ function initialize(dna_stack, init_positions, params)
 
     I = 1
     for i in I:is
-        append!(nn.IO_components, [AllCell(InputNode(1, init_positions[i], 0., false))])
+        append!(nn.IO_components, [AllCell(InputNode(lays*2+1, init_positions[i], 0., false))])
     end
     I += is
-    for i in I:I+os
-        append!(nn.IO_components, [AllCell(OutputNode(lays*2, init_positions[is+i], 0., false))])
+    for i in I:I+os-1
+        append!(nn.IO_components, [AllCell(OutputNode(1, init_positions[is+i], 0., false))])
     end
     I += os
 
@@ -58,20 +58,20 @@ function initialize(dna_stack, init_positions, params)
     # num_layers = 7+6+2
     # [inp, n, c, n, c, n, c, n, out]
 
-    for l in 2:2:lays+1
-        num_n = n_per_l[Integer(1+ceil(l/2))]
+    for l in 2:2:(lays*2)
+        num_n = n_per_l[Integer(ceil(l/2))]
 
-        for i in I:1+num_pr+num_po:I+num_n+(num_n * num_pr)+(num_n * num_po)
+        for i in I:1+num_pr+num_po:I+num_n+(num_n * num_pr)+(num_n * num_po)-1
             n = add_neuron!(nn, l, init_positions[i])
 
             for j in 1:num_pr
-                add_dendrite!(nn, n, l-1, init_positions[i+j])
+                add_dendrite!(nn, n, l+1, init_positions[i+j])
             end
             for k in 1:num_po
-                add_axon_point!(nn, n, l+1, init_positions[i+num_pr+k])
+                add_axon_point!(nn, n, l-1, init_positions[i+num_pr+k])
             end
         end
-        I += n_per_l[l] + (n_per_l[l]*num_pr) + (n_per_l[l]*num_po)
+        I += num_n + (num_n*num_pr) + (num_n*num_po)
     end
 
     # # populate network with segmentation [input positions, output positions, neuron positions, dendrite positions, axon point positions]
@@ -268,8 +268,8 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
         println("episode: $e")
 
         for n in 1:parallel_networks
-            if rand() > clamp(1/log(e), 0, 1)
-                if rand() > clamp(1/log(e), 0, 1)
+            if rand() > 1/log(max(ℯ, maximum([bn[1] for bn in best_nets_buf]))) - 0.1
+                if rand() > 1/log(max(ℯ, maximum([bn[1] for bn in best_nets_buf]))) - 0.1
                     println("$(n) sample dna combinations")
                     dna_stack, x = sample_from_sets_random([bnb[2] for bnb in best_nets_buf], params)
                 else
@@ -283,8 +283,8 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
                 dna_stack, x = get_random_set(params)
             end
 
-            if rand() > clamp(1/log(e), 0, 1)
-                if rand() > clamp(1/log(e), 0, 1)
+            if rand() > 1/log(max(ℯ, maximum([bn[1] for bn in best_nets_buf]))) - 0.1
+                if rand() > 1/log(max(ℯ, mean([bn[1] for bn in best_nets_buf]))) - 0.1
                     println("$(n) sample position combinations")
                     init_positions, p = sample_init_positions_from_sets_random([bn[2] for bn in best_init_pos], params)
                 else
@@ -317,10 +317,10 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
                     s = Array(s)
                     state = [s[1]>0,s[1]<0, s[2]>0,s[2]<0, s[3]>0,s[3]<0]# [(s[2] > 0), (s[2] < 0), (s[4] > 0), (s[4] < 0)]
 
-                    for _ in 1:2
+                    for _ in 1:length(params["LAYERS"][2:end-1])
                         den_sinks, den_surges, ap_sinks, ap_surges = value_step!(net, state)
                         state_step!(net, den_sinks, den_surges, ap_sinks, ap_surges)
-                        clean_network_components!(net, length(params["LAYERS"]))
+                        clean_network_components!(net, ((length(params["LAYERS"])-2)*2+1))
                         # runtime_instantiate_components!(net, I)
                     end
 
@@ -415,7 +415,6 @@ function unsupervised_test(sample, init_positions, episodes::Integer, iterations
 
     net = initialize(dna_stack, init_positions, params)
 
-    I = 1 # for counting iterations
     metrics = Dict()
 
     for e in 1:episodes
@@ -428,11 +427,12 @@ function unsupervised_test(sample, init_positions, episodes::Integer, iterations
             state = [s[1]>0,s[1]<0, s[2]>0,s[2]<0, s[3]>0,s[3]<0]# [(s[2] > 0), (s[2] < 0), (s[4] > 0), (s[4] < 0)]
 
 
-            den_sinks, den_surges, ap_sinks, ap_surges = value_step!(net, state)
-            state_step!(net, den_sinks, den_surges, ap_sinks, ap_surges)
-            clean_network_components!(net, length(params["LAYERS"]))
-            # runtime_instantiate_components!(net, I)
-            I += 1
+            for _ in 1:length(params["LAYERS"][2:end-1])
+                den_sinks, den_surges, ap_sinks, ap_surges = value_step!(net, state)
+                state_step!(net, den_sinks, den_surges, ap_sinks, ap_surges)
+                clean_network_components!(net, ((length(params["LAYERS"])-2)*2+1))
+                # runtime_instantiate_components!(net, I)
+            end
 
             positions, connections = get_all_relations(net) # returns [np, app, denp, synp, inp, outp], connections
             if "episode_$(e)_positions" in keys(metrics)
@@ -446,31 +446,20 @@ function unsupervised_test(sample, init_positions, episodes::Integer, iterations
                 metrics["episode_$(e)_connections"] = [connections]
             end
 
-            #
-            # if I % 100 == 0
-            #     if !all([inn.referenced for inn in get_input_nodes(net)]) && get_all_neurons(net) != []
-            #         net.total_fitness -= 5000
-            #         # add_dendrite!(net, rand(get_all_neurons(net)))
-            #     end
-            #     if !all([onn.referenced for onn in get_output_nodes(net)]) && get_all_neurons(net) != []
-            #         net.total_fitness -= 5000
-            #         # add_axon_point!(net, rand(get_all_neurons(net)))
-            #     end
-            # end
-
-
 
 
             out = [on.value for on in get_output_nodes(net)]
             a = action_space[argmax(out)]
             r, s = step!(env, a)
 
+            println("out = $out")
+
             if render
-                render(env)
+                OpenAIGym.render(env)
             end
-            if env.done
-                break
-            end
+            # if env.done
+            #     break
+            # end
         end
     end
 
