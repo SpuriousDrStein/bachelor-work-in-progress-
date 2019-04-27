@@ -2,9 +2,9 @@ include("structure.jl")
 include("functions.jl")
 
 # NETWORK HP's
-init_params =   Dict("NETWORK_SIZE"                 => FloatN(20),
+init_params =   Dict("NETWORK_SIZE"                 => FloatN(10),
                 "GLOBAL_STDV"                       => FloatN(0.5),
-                "INIT_POSITION_STDV"                => FloatN(4),
+                "INIT_POSITION_STDV"                => FloatN(2),
                 # "NEURON_LIFETIME"                   => FloatN(100000),
                 # "SYNAPTIC_LIFETIME"                 => FloatN(100000),
                 # "DENDRITE_LIFETIME"                 => FloatN(100000),
@@ -12,45 +12,45 @@ init_params =   Dict("NETWORK_SIZE"                 => FloatN(20),
                 # "NEURON_REPEL_FORCE"                => FloatN(0),
                 # "LIFE_DECAY"                        => FloatN(1.),
                 "MIN_FUSE_DISTANCE"                 => FloatN(0.3),
-                "AP_SINK_ATTRACTIVE_FORCE"          => FloatN(1), # force:    AxonPoint's -> ap_sinks
-                "DEN_SURGE_REPULSIVE_FORCE"         => FloatN(2), # repulsive force of den/occupied input -> den
+                "AP_SINK_ATTRACTIVE_FORCE"          => FloatN(2), # force:    AxonPoint's -> ap_sinks
+                "DEN_SURGE_REPULSIVE_FORCE"         => FloatN(3), # repulsive force of den/occupied input -> den
                 "AP_SURGE_REPULSIVE_FORCE"          => FloatN(2), # repulsive force of ap/occupied output -> ap
                 "INPUT_ATTRACTIVE_FORCE"            => FloatN(6),
                 "OUTPUT_ATTRACTIVE_FORCE"           => FloatN(6),
-                "MAX_SYNAPTIC_THRESHOLD"            => FloatN(4),
-                "MAX_NEURON_THRESHOLD"              => FloatN(6),
+                "MAX_SYNAPTIC_THRESHOLD"            => FloatN(5),
+                "MAX_NEURON_THRESHOLD"              => FloatN(7),
                 "NEURON_DESTRUCTION_THRESHOLD"      => FloatN(0.1),
                 "SYNAPS_DESTRUCTION_THRESHOLD"      => FloatN(0.05),
                 "MAX_NT_STRENGTH"                   => FloatN(1.5),
-                "NT_RETAIN_PERCENTAGE"              => FloatN(0.8),
+                "NT_RETAIN_PERCENTAGE"              => FloatN(0.7),
                 "MAX_RESISTANCE"                    => FloatN(1.6),
                 "MAX_NUM_PRIORS"                    => 3,
                 "MAX_NUM_POSTERIORS"                => 3,
-                "INIT_PRIORS"                       => 3,
+                "INIT_PRIORS"                       => 2,
                 "INIT_POSTERIORS"                   => 3,
-                "LAYERS"                            => [6,3,3,2], # #layer = length
+                "LAYERS"                            => [6,8,8,4], # #layer = length
                 # "NEURON_INIT_INTERVAL"              => 10000,
                 # "AP_DEN_INIT_INTERVAL"              => 5000, # a minimum to negate the possibility of calling the add_dendrite or add_axon_point function every timestep
                 "TOP_BUFFER_LENGTH"                 => 10,
-                "DNA_SAMPLE_SIZE"                   => 2)
+                "DNA_SAMPLE_SIZE"                   => 1)
                 # "DATA_INPUT_SIZE"                   => 6,
                 # "DATA_OUTPUT_SIZE"                  => 2)
 
-net_episodes = 50
+net_episodes = 100
 env_episodes = 30
-iterations = 300
-parallel_networks = 3
+iterations = 70
+parallel_networks = 4
 test_episodes = 30
 env = :CartPole
 v = :v1
 # Acrobot state = [cos(theta1) sin(theta1) cos(theta2) sin(theta2) thetaDot1 thetaDot2]
 
 best_dna, best_init_pos, metrics = unsupervised_train(net_episodes, env_episodes, iterations, parallel_networks, env, v, init_params)
-
 println("training time = ", sum(sum(metrics["net_$(n)_execution_time"] for n in 1:parallel_networks))/60, " minutes")
 
-ind = 10; metrics2 = unsupervised_test(sort(best_dna)[ind][2], sort(best_init_pos)[ind][2], test_episodes, 40, env, v, init_params, true)
-for j in 4:5
+
+ind = 1; metrics2 = unsupervised_test(sort(best_dna)[ind][2], sort(best_init_pos)[ind][2], test_episodes, iterations, env, v, init_params, true)
+for j in test_episodes
     for i in 1:length(metrics2["episode_$(j)_positions"])
         t_p = metrics2["episode_$(j)_positions"][i]
         t_c = metrics2["episode_$(j)_connections"][i]

@@ -268,8 +268,8 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
         println("episode: $e")
 
         for n in 1:parallel_networks
-            if rand() > 1/log(max(ℯ, maximum([bn[1] for bn in best_nets_buf]))) - 0.1
-                if rand() > 1/log(max(ℯ, maximum([bn[1] for bn in best_nets_buf]))) - 0.1
+            if rand() > 1/log(max(ℯ, mean([bn[1] for bn in best_nets_buf])))
+                if rand() > 1/log(max(ℯ, mean([bn[1] for bn in best_nets_buf])))
                     println("$(n) sample dna combinations")
                     dna_stack, x = sample_from_sets_random([bnb[2] for bnb in best_nets_buf], params)
                 else
@@ -283,8 +283,8 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
                 dna_stack, x = get_random_set(params)
             end
 
-            if rand() > 1/log(max(ℯ, maximum([bn[1] for bn in best_nets_buf]))) - 0.1
-                if rand() > 1/log(max(ℯ, mean([bn[1] for bn in best_nets_buf]))) - 0.1
+            if rand() > 1/log(max(ℯ, mean([bn[1] for bn in best_nets_buf])))
+                if rand() > 1/log(max(ℯ, mean([bn[1] for bn in best_nets_buf])))
                     println("$(n) sample position combinations")
                     init_positions, p = sample_init_positions_from_sets_random([bn[2] for bn in best_init_pos], params)
                 else
@@ -310,12 +310,12 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
             for ee in 1:env_episodes
                 s = reset!(env)
 
-                # reset_network_components!(net)
+                reset_network_components!(net)
 
                 for i in 1:iterations
                     # for Acrobot
                     s = Array(s)
-                    state = [s[1]>0,s[1]<0, s[2]>0,s[2]<0, s[3]>0,s[3]<0]# [(s[2] > 0), (s[2] < 0), (s[4] > 0), (s[4] < 0)]
+                    state = [s[1]>0, s[1]<0, s[2]>0, s[2]<0, s[3]>0, s[3]<0]# [(s[2] > 0), (s[2] < 0), (s[4] > 0), (s[4] < 0)]
 
                     for _ in 1:length(params["LAYERS"][2:end-1])
                         den_sinks, den_surges, ap_sinks, ap_surges = value_step!(net, state)
@@ -340,7 +340,8 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
 
                     # println([nnn.Q for nnn in get_all_neurons(net)])
 
-                    out = [on.value for on in get_output_nodes(net)]
+                    out = get_output_nodes(net)
+                    out = [out[on].value + out[on+1].value for on in 1:2:length(out)]
                     a = action_space[argmax(out)]
                     r, s = step!(env, a)
 
@@ -419,7 +420,7 @@ function unsupervised_test(sample, init_positions, episodes::Integer, iterations
 
     for e in 1:episodes
         s = reset!(env)
-        # reset_network_components!(net)
+        reset_network_components!(net)
 
         for i in 1:iterations
             # for Acrobot
@@ -448,7 +449,8 @@ function unsupervised_test(sample, init_positions, episodes::Integer, iterations
 
 
 
-            out = [on.value for on in get_output_nodes(net)]
+            out = get_output_nodes(net)
+            out = [out[on].value + out[on+1].value for on in 1:2:length(out)]
             a = action_space[argmax(out)]
             r, s = step!(env, a)
 

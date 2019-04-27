@@ -64,8 +64,14 @@ function propergate!(N::Neuron, NN::Network, den_sinks::Array, ap_surges::Array)
                 a.cell.value = N.Q/length(post_all)
             end
         end
+        N.Q = 0.
     else
         N.Q = 0.
+        for a in post_all
+            if typeof(a.cell) == OutputNode
+                a.cell.value = 0
+            end
+        end
     end
 end
 
