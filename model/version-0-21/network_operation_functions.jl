@@ -5,20 +5,20 @@ function update_neuron!(N::Neuron, NN::Network, dispersion_collection::Dict)
 
     if input_syns != [] || input_nodes != []
 
-        input = sum([[i_n.value for i_n in input_nodes]..., [s.Q * s.NT.strength for s in input_syns]...])
+        input = sum([[i_n.value for i_n in input_nodes]..., [s.Q for s in input_syns]...])# [s.Q * s.NT.strength for s in input_syns]...])
 
         N.Q = input
 
         N.d_total_fitness = (N.d_total_fitness + length(input_syns) + 1) / 2 # 1 for beeing activated
 
         for is in input_syns
-            for s in get_synapses(Subnet(is.position, is.Q/NN.size), get_synapses(get_all_all_cells(NN)))
-                if s in keys(dispersion_collection)
-                    dispersion_collection[s] = dispersion_collection[s] .+ (s.NT.strength, 1)
-                else
-                    dispersion_collection[s] = (s.NT.strength, 1)
-                end
-            end
+            # for s in get_synapses(Subnet(is.position, is.Q/NN.size), get_synapses(get_all_all_cells(NN)))
+            #     if s in keys(dispersion_collection)
+            #         dispersion_collection[s] = dispersion_collection[s] .+ (s.NT.strength, 1)
+            #     else
+            #         dispersion_collection[s] = (s.NT.strength, 1)
+            #     end
+            # end
         end
     else
         N.d_total_fitness /= 2
@@ -36,9 +36,9 @@ function update_synaps!(s::AllCell, NN::Network, dispersion_collection)
     end
 
     # change nt
-    dispersion_value, n = get(dispersion_collection, s.cell, (1, 1))
-    avg_NT_change = dispersion_value/n
-    s.cell.NT.strength = NN.nt_retain_percentage * s.cell.NT.strength + (1-NN.nt_retain_percentage) * avg_NT_change
+    # dispersion_value, n = get(dispersion_collection, s.cell, (1, 1))
+    # avg_NT_change = dispersion_value/n
+    # s.cell.NT.strength = NN.nt_retain_percentage * s.cell.NT.strength + (1-NN.nt_retain_percentage) * avg_NT_change
 
     # update syn-fitness
     # s.cell.d_total_fitness += ((avg_NT_change+s.cell.NT.strength)/2)/(abs(avg_NT_change-s.cell.NT.strength)+0.00001)

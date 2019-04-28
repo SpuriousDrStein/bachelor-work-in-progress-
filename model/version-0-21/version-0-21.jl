@@ -1,10 +1,11 @@
 include("structure.jl")
 include("functions.jl")
 
+
 # NETWORK HP's
 init_params =   Dict("NETWORK_SIZE"                 => FloatN(10),
                 "GLOBAL_STDV"                       => FloatN(0.5),
-                "INIT_POSITION_STDV"                => FloatN(2),
+                "INIT_POSITION_STDV"                => FloatN(1),
                 # "NEURON_LIFETIME"                   => FloatN(100000),
                 # "SYNAPTIC_LIFETIME"                 => FloatN(100000),
                 # "DENDRITE_LIFETIME"                 => FloatN(100000),
@@ -24,11 +25,11 @@ init_params =   Dict("NETWORK_SIZE"                 => FloatN(10),
                 "MAX_NT_STRENGTH"                   => FloatN(1.5),
                 "NT_RETAIN_PERCENTAGE"              => FloatN(0.7),
                 "MAX_RESISTANCE"                    => FloatN(1.6),
-                "MAX_NUM_PRIORS"                    => 3,
-                "MAX_NUM_POSTERIORS"                => 3,
-                "INIT_PRIORS"                       => 2,
+                "MAX_NUM_PRIORS"                    => 10,
+                "MAX_NUM_POSTERIORS"                => 10,
+                "INIT_PRIORS"                       => 3,
                 "INIT_POSTERIORS"                   => 3,
-                "LAYERS"                            => [6,8,8,4], # #layer = length
+                "LAYERS"                            => [6,5,5,4], # #layer = length
                 # "NEURON_INIT_INTERVAL"              => 10000,
                 # "AP_DEN_INIT_INTERVAL"              => 5000, # a minimum to negate the possibility of calling the add_dendrite or add_axon_point function every timestep
                 "TOP_BUFFER_LENGTH"                 => 10,
@@ -36,9 +37,9 @@ init_params =   Dict("NETWORK_SIZE"                 => FloatN(10),
                 # "DATA_INPUT_SIZE"                   => 6,
                 # "DATA_OUTPUT_SIZE"                  => 2)
 
-net_episodes = 100
-env_episodes = 30
-iterations = 70
+net_episodes = 150
+env_episodes = 15
+iterations = 140
 parallel_networks = 4
 test_episodes = 30
 env = :CartPole
@@ -49,7 +50,7 @@ best_dna, best_init_pos, metrics = unsupervised_train(net_episodes, env_episodes
 println("training time = ", sum(sum(metrics["net_$(n)_execution_time"] for n in 1:parallel_networks))/60, " minutes")
 
 
-ind = 1; metrics2 = unsupervised_test(sort(best_dna)[ind][2], sort(best_init_pos)[ind][2], test_episodes, iterations, env, v, init_params, true)
+ind = 10; metrics2 = unsupervised_test(sort(best_dna)[ind][2], sort(best_init_pos)[ind][2], test_episodes, iterations, env, v, init_params, true)
 for j in test_episodes
     for i in 1:length(metrics2["episode_$(j)_positions"])
         t_p = metrics2["episode_$(j)_positions"][i]
@@ -67,7 +68,7 @@ begin
     plot([(m1[i]+sum(m1[i-n:i-1])+sum(m1[i+1:i+n]))/(n*2+1) for i in n+1:length(m1)-n], xlabel="episodes", label="mean total fitness", linealpha=0.6, leg=:bottomright)
     plot!([(m2[i]+sum(m2[i-n:i-1])+sum(m2[i+1:i+n]))/(n*2+1) for i in n+1:length(m2)-n], label="mean sum neuron fitness")
     plot!([(m3[i]+sum(m3[i-n:i-1])+sum(m3[i+1:i+n]))/(n*2+1) for i in n+1:length(m3)-n], label="mean sum synaps fitness", linealpha=0.7)
-    plot!(mean([metrics["net_$(n)_env_reward"] for n in 1:parallel_networks]), label="environment reward", c="purple")
+    plot!(mean([metrics["net_$(n)_env_reward"] for n in 1:parallel_networks]), label="environment reward", c="purple", linewidth=0.6)
 end
 
 

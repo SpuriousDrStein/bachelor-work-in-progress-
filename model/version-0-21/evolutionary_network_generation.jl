@@ -33,8 +33,8 @@ function initialize(dna_stack, init_positions, params)
     #     throw("Layers have to be even in number")
     # end
 
-    num_pr = params["INIT_POSTERIORS"]
-    num_po = params["INIT_PRIORS"]
+    num_pr = params["INIT_PRIORS"]
+    num_po = params["INIT_POSTERIORS"]
     ns = params["NETWORK_SIZE"]
     n_per_l = params["LAYERS"][2:end-1]
     is = params["LAYERS"][1]
@@ -346,12 +346,12 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
                     r, s = step!(env, a)
 
                     if to_degree(s[3]) >= -12 && to_degree(s[3]) <= 12
-                        net.total_fitness += 1
-                        sum_env_rewards += 1
+                        net.total_fitness += 50
+                        sum_env_rewards += 50
                     end
                     if s[1] >= 1 || s[1] <= -1
-                        net.total_fitness -= 1
-                        sum_env_rewards -= 1
+                        net.total_fitness -= 50
+                        sum_env_rewards -= 50
                     end
 
                     # if env.done
@@ -446,7 +446,7 @@ function unsupervised_test(sample, init_positions, episodes::Integer, iterations
             else
                 metrics["episode_$(e)_connections"] = [connections]
             end
-
+            # println([s.NT.strength for s in get_synapses(get_all_all_cells(net))])
 
 
             out = get_output_nodes(net)

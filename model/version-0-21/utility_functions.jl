@@ -102,9 +102,9 @@ function get_all_relations(NN::Network)
     end
 end
 
-function rectify_position(p::Position, nn_size::FloatN)
-    if distance(p, Position(0,0)) > nn_size
-        return Position((normalize(p) * nn_size)...)
+function rectify_position(p::Position, len::FloatN)
+    if distance(p, Position(0,0)) > len
+        return Position((normalize(p) * len)...)
     else
         return p
     end
