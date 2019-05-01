@@ -20,8 +20,8 @@ init_params =   Dict("NETWORK_SIZE"                 => FloatN(10),
                 "OUTPUT_ATTRACTIVE_FORCE"           => FloatN(6),
                 "MAX_SYNAPTIC_THRESHOLD"            => FloatN(5),
                 "MAX_NEURON_THRESHOLD"              => FloatN(7),
-                "NEURON_DESTRUCTION_THRESHOLD"      => FloatN(0.1),
-                "SYNAPS_DESTRUCTION_THRESHOLD"      => FloatN(0.05),
+                "NEURON_DESTRUCTION_THRESHOLD"      => FloatN(0.2),
+                "SYNAPS_DESTRUCTION_THRESHOLD"      => FloatN(0.2),
                 "MAX_NT_STRENGTH"                   => FloatN(1.5),
                 "NT_RETAIN_PERCENTAGE"              => FloatN(0.7),
                 "MAX_RESISTANCE"                    => FloatN(1.6),
@@ -29,7 +29,7 @@ init_params =   Dict("NETWORK_SIZE"                 => FloatN(10),
                 "MAX_NUM_POSTERIORS"                => 10,
                 "INIT_PRIORS"                       => 3,
                 "INIT_POSTERIORS"                   => 3,
-                "LAYERS"                            => [6,5,5,4], # #layer = length
+                "LAYERS"                            => [6,12,12,4], # #layer = length
                 # "NEURON_INIT_INTERVAL"              => 10000,
                 # "AP_DEN_INIT_INTERVAL"              => 5000, # a minimum to negate the possibility of calling the add_dendrite or add_axon_point function every timestep
                 "TOP_BUFFER_LENGTH"                 => 10,
@@ -48,6 +48,7 @@ v = :v1
 
 best_dna, best_init_pos, metrics = unsupervised_train(net_episodes, env_episodes, iterations, parallel_networks, env, v, init_params)
 println("training time = ", sum(sum(metrics["net_$(n)_execution_time"] for n in 1:parallel_networks))/60, " minutes")
+
 
 
 ind = 10; metrics2 = unsupervised_test(sort(best_dna)[ind][2], sort(best_init_pos)[ind][2], test_episodes, iterations, env, v, init_params, true)

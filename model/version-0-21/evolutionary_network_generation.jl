@@ -251,8 +251,8 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
     action_space = one(action_index * action_index')
 
     dna_ss = params["DNA_SAMPLE_SIZE"]
-    best_nets_buf = [[-9999, get_random_set(params)[2]] for _ in 1:params["TOP_BUFFER_LENGTH"]]
-    best_init_pos = [[-9999, get_random_init_positions(params)[2]] for _ in 1:params["TOP_BUFFER_LENGTH"]]
+    best_nets_buf = [[-99999, get_random_set(params)[2]] for _ in 1:params["TOP_BUFFER_LENGTH"]]
+    best_init_pos = [[-99999, get_random_init_positions(params)[2]] for _ in 1:params["TOP_BUFFER_LENGTH"]]
 
     metrics = Dict([("net_$(n)_current_fitness" => []) for n in 1:parallel_networks]...,
                     [("net_$(n)_neuron_fitness" => []) for n in 1:parallel_networks]...,
@@ -268,34 +268,48 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
         println("episode: $e")
 
         for n in 1:parallel_networks
-            if rand() > 1/log(max(ℯ, mean([bn[1] for bn in best_nets_buf])))
-                if rand() > 1/log(max(ℯ, mean([bn[1] for bn in best_nets_buf])))
-                    println("$(n) sample dna combinations")
-                    dna_stack, x = sample_from_sets_random([bnb[2] for bnb in best_nets_buf], params)
+            if rand() > 0.5
+                if rand() > 1/log(max(ℯ-0.25, mean([bn[1] for bn in best_nets_buf])))
+                    if rand() > 1/log(max(ℯ-0.25, mean([bn[1] for bn in best_nets_buf])))
+                        println("$(n) sample dna combinations")
+                        dna_stack, x = sample_from_sets_random([bnb[2] for bnb in best_nets_buf], params)
+                    else
+                        println("$(n) sample dna normal")
+                        net_distro = softmax([bn[1]/mean([i[1] for i in best_nets_buf]) for bn in best_nets_buf])
+                        net_params = sample(Random.GLOBAL_RNG, best_nets_buf, Weights(net_distro))[2]
+                        dna_stack, x = sample_from_set_scaled(net_params, params)
+                    end
                 else
-                    println("$(n) sample dna normal")
-                    net_distro = softmax([bn[1]/mean([i[1] for i in best_nets_buf]) for bn in best_nets_buf])
-                    net_params = sample(Random.GLOBAL_RNG, best_nets_buf, Weights(net_distro))[2]
-                    dna_stack, x = sample_from_set_scaled(net_params, params)
+                    println("$(n) sample dna random")
+                    dna_stack, x = get_random_set(params)
                 end
             else
-                println("$(n) sample dna random")
-                dna_stack, x = get_random_set(params)
+                println("$(n) sample dna repeat")
+                net_distro = softmax([bn[1]/mean([i[1] for i in best_nets_buf]) for bn in best_nets_buf])
+                net_params = sample(Random.GLOBAL_RNG, best_nets_buf, Weights(net_distro))[2]
+                dna_stack, x = sample_from_set_scaled(net_params, params)
             end
 
-            if rand() > 1/log(max(ℯ, mean([bn[1] for bn in best_nets_buf])))
-                if rand() > 1/log(max(ℯ, mean([bn[1] for bn in best_nets_buf])))
-                    println("$(n) sample position combinations")
-                    init_positions, p = sample_init_positions_from_sets_random([bn[2] for bn in best_init_pos], params)
+            if rand() > 0.5
+                if rand() > 1/log(max(ℯ-0.25, mean([bn[1] for bn in best_nets_buf])))
+                    if rand() > 1/log(max(ℯ-0.25, mean([bn[1] for bn in best_nets_buf])))
+                        println("$(n) sample position combinations")
+                        init_positions, p = sample_init_positions_from_sets_random([bn[2] for bn in best_init_pos], params)
+                    else
+                        println("$(n) sample position normal")
+                        pos_distro = softmax([bp[1]/mean([i[1] for i in best_init_pos]) for bp in best_init_pos])
+                        pos_params = sample(Random.GLOBAL_RNG, best_init_pos, Weights(pos_distro))[2]
+                        init_positions, p = sample_init_positions_from_set(pos_params, params)
+                    end
                 else
-                    println("$(n) sample position normal")
-                    pos_distro = softmax([bp[1]/mean([i[1] for i in best_init_pos]) for bp in best_init_pos])
-                    pos_params = sample(Random.GLOBAL_RNG, best_init_pos, Weights(pos_distro))[2]
-                    init_positions, p = sample_init_positions_from_set(pos_params, params)
+                    println("$(n) sample position random")
+                    init_positions, p = get_random_init_positions(params)
                 end
             else
-                println("$(n) sample position random")
-                init_positions, p = get_random_init_positions(params)
+                println("$(n) sample position repeat")
+                pos_distro = softmax([bp[1]/mean([i[1] for i in best_init_pos]) for bp in best_init_pos])
+                pos_params = sample(Random.GLOBAL_RNG, best_init_pos, Weights(pos_distro))[2]
+                init_positions, p = sample_init_positions_from_set(pos_params, params)
             end
 
             net = initialize(dna_stack, init_positions, params)
@@ -304,7 +318,6 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
             I = 1 # for counting iterations
             t = time()
             sum_env_rewards = 0
-            # total_output = [0. for _ in 1:params["DATA_OUTPUT_SIZE"]]
 
             # training
             for ee in 1:env_episodes

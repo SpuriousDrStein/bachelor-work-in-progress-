@@ -48,9 +48,9 @@ function display_timestep(positions, connections, params, episode, iteration) # 
         plot!([c[1].x, c[2].x], [c[1].y, c[2].y], c="red", linewidth=0.1, linealpha=0.6, l=:arrow)
     end
 
-    for l in 1:((length(params["LAYERS"])-2)*2+1)
-        plot!([cos.(-π:0.001:π).*((params["NETWORK_SIZE"]/((length(params["LAYERS"])-2)*2+1))*l)], [sin.(-π:0.001:π).*((params["NETWORK_SIZE"]/((length(params["LAYERS"])-2)*2+1))*l)], linealpha=0.3)
-    end
+    # for l in 1:((length(params["LAYERS"])-2)*2+1)
+    #     plot!([cos.(-π:0.001:π).*((params["NETWORK_SIZE"]/((length(params["LAYERS"])-2)*2+1))*l)], [sin.(-π:0.001:π).*((params["NETWORK_SIZE"]/((length(params["LAYERS"])-2)*2+1))*l)], linealpha=0.3)
+    # end
 
     p2 = scatter(grid=false, showaxis=false, xlims=(0,0))
     scatter!([0], label="neurons", c="blue")
