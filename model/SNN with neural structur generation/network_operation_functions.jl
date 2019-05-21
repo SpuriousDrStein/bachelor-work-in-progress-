@@ -1,80 +1,4 @@
-function update_neuron!(N::Neuron, NN::Network, dispersion_collection::Dict)
-    prior_all = get_prior_all_cells(N)
-    input_syns = [s for s in get_synapses(prior_all) if s.Q >= s.THR]
-    input_nodes = get_input_nodes(prior_all)
-
-    if input_syns != [] || input_nodes != []
-
-        input = sum([[i_n.value for i_n in input_nodes]..., [s.Q for s in input_syns]...])# [s.Q * s.NT.strength for s in input_syns]...])
-
-        N.Q = input
-
-        N.d_total_fitness = (N.d_total_fitness + length(input_syns) + 1) / 2 # 1 for beeing activated
-
-        for is in input_syns
-            # for s in get_synapses(Subnet(is.position, is.Q/NN.size), get_synapses(get_all_all_cells(NN)))
-            #     if s in keys(dispersion_collection)
-            #         dispersion_collection[s] = dispersion_collection[s] .+ (s.NT.strength, 1)
-            #     else
-            #         dispersion_collection[s] = (s.NT.strength, 1)
-            #     end
-            # end
-        end
-    else
-        N.d_total_fitness /= 2
-    end
-    N.total_fitness += N.d_total_fitness
-end
-function update_synaps!(s::AllCell, NN::Network, dispersion_collection)
-    if s.cell.Q >= s.cell.THR
-        s.cell.Q = 0.
-        s.cell.R = 0.01
-        s.cell.d_total_fitness += 1
-    else
-        s.cell.Q *= s.cell.R
-        s.cell.R = min(s.cell.R * s.cell.RRecovery, s.cell.maxR)
-    end
-
-    # change nt
-    # dispersion_value, n = get(dispersion_collection, s.cell, (1, 1))
-    # avg_NT_change = dispersion_value/n
-    # s.cell.NT.strength = NN.nt_retain_percentage * s.cell.NT.strength + (1-NN.nt_retain_percentage) * avg_NT_change
-
-    # update syn-fitness
-    # s.cell.d_total_fitness += ((avg_NT_change+s.cell.NT.strength)/2)/(abs(avg_NT_change-s.cell.NT.strength)+0.00001)
-    s.cell.d_total_fitness /= 2
-    s.cell.total_fitness += s.cell.d_total_fitness
-
-    if s.cell.d_total_fitness <= s.cell.destruction_threshold
-        s.cell.total_fitness -= 1
-    end
-    # s.cell.lifeTime -= NN.life_decay
-end
-function propergate!(N::Neuron, NN::Network, den_sinks::Array, ap_surges::Array)
-    post_all = get_posterior_all_cells(N)
-
-    if N.Q >= N.THR
-        for a in post_all
-            if typeof(a.cell) == Synaps
-                a.cell.Q += N.Q/length(post_all)
-            elseif typeof(a.cell) == AxonPoint
-                append!(den_sinks, [Sink(a.cell.layer, copy(a.cell.position), N.Q/length(post_all))])
-                append!(ap_surges, [Surge(a.cell.layer, copy(a.cell.position), NN.ap_surge_repulsive_force)])
-            elseif typeof(a.cell) == OutputNode
-                a.cell.value = N.Q/length(post_all)
-            end
-        end
-        N.Q = 0.
-    else
-        N.Q = 0.
-        for a in post_all
-            if typeof(a.cell) == OutputNode
-                a.cell.value = 0
-            end
-        end
-    end
-end
-
+# primary update functions
 function value_step!(NN::Network, input::Array)
     network_all_cells = get_all_all_cells(NN)
     n_ind = get_all_neuron_indecies(NN)
@@ -138,7 +62,6 @@ function value_step!(NN::Network, input::Array)
     return den_sinks, den_surges, ap_sinks, ap_surges
 end
 
-
 function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
     # update spatial relation
     network_all_cells = get_all_all_cells(NN)
@@ -146,10 +69,9 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
     in_nodes = get_input_nodes_in_all(NN)
     out_nodes = get_output_nodes_in_all(NN)
 
-    if get_all_neurons(NN) == []
-        # println("exit state step because no neurons exist")
-        return nothing
-    end
+    # if get_all_neurons(NN) == []
+    #     return nothing
+    # end
 
     if network_all_cells != []
         # input node position update
@@ -157,6 +79,7 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
             if !i_nn.cell.referenced
                 total_v = [0.,0.]
                 div = 1
+                # calculate position update based on sinks and other input nodes
                 for ap_sink in ap_sinks
                     if ap_sink.layer == i_nn.cell.layer
                         dir = direction(i_nn.cell.position, ap_sink.position)
@@ -169,14 +92,14 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
                         div += 1
                     end
                 end
-                # for i_nn2 in in_nodes
-                #     if i_nn2 !== i_nn
-                #         dir = direction(i_nn2.cell.position, i_nn.cell.position)
-                #         mag = min(NN.min_fuse_distance/vector_length(dir), NN.min_fuse_distance)
-                #         total_v .+= normalize(dir) .* mag
-                #         div += 1
-                #     end
-                # end
+                for i_nn2 in get_input_nodes_in_all(NN)
+                    if i_nn2 !== i_nn
+                        dir = direction(i_nn2.cell.position, i_nn.cell.position)
+                        mag = min(NN.min_fuse_distance/vector_length(dir), NN.min_fuse_distance)
+                        total_v .+= normalize(dir) .* mag
+                        div += 1
+                    end
+                end
 
                 total_v ./= div
                 i_nn.cell.position += Position(total_v...)
@@ -188,6 +111,7 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
             if !o_nn.cell.referenced
                 total_v = [0.,0.]
                 div = 1
+                # calculate position update based on sinks and other output nodes
                 for d_sink in den_sinks
                     if d_sink.layer == o_nn.cell.layer
                         dir = direction(o_nn.cell.position, d_sink.position)
@@ -218,6 +142,7 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
         for den in get_dendrites_in_all(network_all_cells)
             total_v = [0.,0.]
             div = 1
+            # calculate position update based on sinks and surges
             for d_sink in den_sinks
                 if d_sink.layer == den.cell.layer
                     dir = direction(den.cell.position, d_sink.position)
@@ -267,6 +192,7 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
         for ap in get_axon_points_in_all(network_all_cells)
             total_v = [0.,0.]
             div = 1
+            # calculate position update based on sinks and surges
             for ap_sink in ap_sinks
                 if ap_sink.layer == ap.cell.layer
                     dir = direction(ap.cell.position, ap_sink.position)
@@ -282,7 +208,6 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
                     div += 1
                 end
             end
-
             for ap_surge in ap_surges
                 if ap_surge.layer == ap.cell.layer
                     dir = direction(ap_surge.position, ap.cell.position)
@@ -352,11 +277,88 @@ function state_step!(NN::Network, den_sinks, den_surges, ap_sinks, ap_surges)
     # end
 end
 
-# STRUCTURE GENERATION FUNCTIONS
-function fuse!(den::AllCell, ap::AllCell, to::Synaps)
-    if typeof(den.cell) != Dendrite || typeof(ap.cell) != AxonPoint
-        # throw("incorect fuse!($(typeof(den.cell)), $(typeof(ap.cell)))")
+
+# secondary update functions
+function update_neuron!(N::Neuron, NN::Network, dispersion_collection::Dict)
+    prior_all = get_prior_all_cells(N)
+    input_syns = [s for s in get_synapses(prior_all) if s.Q >= s.THR]
+    input_nodes = get_input_nodes(prior_all)
+
+    N.Q = 0
+    if input_syns != [] || input_nodes != []
+
+        input = sum([[i_n.value for i_n in input_nodes]..., [s.Q for s in input_syns]...])# [s.Q * s.NT.strength for s in input_syns]...])
+
+        N.Q = input
+
+        N.d_total_fitness = (N.d_total_fitness + length(input_syns) + 1) / 2 # 1 for beeing activated
+
+        # disperse Neurotransmitter
+        # for is in input_syns
+        #     for s in get_synapses(Subnet(is.position, is.Q/NN.size), get_synapses(get_all_all_cells(NN)))
+        #         if s in keys(dispersion_collection)
+        #             dispersion_collection[s] = dispersion_collection[s] .+ (s.NT.strength, 1)
+        #         else
+        #             dispersion_collection[s] = (s.NT.strength, 1)
+        #         end
+        #     end
+        # end
     else
+        N.d_total_fitness /= 2
+    end
+    N.total_fitness += N.d_total_fitness
+end
+function update_synaps!(s::AllCell, NN::Network, dispersion_collection)
+    if s.cell.Q >= s.cell.THR
+        s.cell.Q = 0.
+        s.cell.R = 0.01
+        s.cell.d_total_fitness += 1
+    else
+        s.cell.Q *= s.cell.R
+        s.cell.R = min(s.cell.R * s.cell.RRecovery, s.cell.maxR)
+    end
+
+    # change nt
+    # dispersion_value, n = get(dispersion_collection, s.cell, (1, 1))
+    # avg_NT_change = dispersion_value/n
+    # s.cell.NT.strength = NN.nt_retain_percentage * s.cell.NT.strength + (1-NN.nt_retain_percentage) * avg_NT_change
+
+    # update syn-fitness
+    # s.cell.d_total_fitness += ((avg_NT_change+s.cell.NT.strength)/2)/(abs(avg_NT_change-s.cell.NT.strength)+0.00001)
+    s.cell.d_total_fitness /= 2
+    s.cell.total_fitness += s.cell.d_total_fitness
+
+    if s.cell.d_total_fitness <= s.cell.destruction_threshold
+        s.cell.total_fitness -= 1
+    end
+    # s.cell.lifeTime -= NN.life_decay
+end
+function propergate!(N::Neuron, NN::Network, den_sinks::Array, ap_surges::Array)
+    post_all = get_posterior_all_cells(N)
+
+    if N.Q >= N.THR
+        for a in post_all
+            if typeof(a.cell) == Synaps
+                a.cell.Q += N.Q/length(post_all)
+            elseif typeof(a.cell) == AxonPoint
+                append!(den_sinks, [Sink(a.cell.layer, copy(a.cell.position), N.Q/length(post_all))])
+                append!(ap_surges, [Surge(a.cell.layer, copy(a.cell.position), NN.ap_surge_repulsive_force)])
+            elseif typeof(a.cell) == OutputNode
+                a.cell.value = N.Q/length(post_all)
+            end
+        end
+    else
+        for a in post_all
+            if typeof(a.cell) == OutputNode
+                a.cell.value = 0
+            end
+        end
+    end
+end
+
+# network mutation functions
+function fuse!(den::AllCell, ap::AllCell, to::Synaps)
+    if typeof(den.cell) == Dendrite || typeof(ap.cell) == AxonPoint
         den.cell = to
         ap.cell = to
     end
@@ -377,13 +379,6 @@ function fuse!(network_node::AllCell, ac::AllCell)
         network_node.cell.referenced = true
     end
 end
-# function add_neuron!(NN::Network)
-#     n = unfold(rand(NN.dna_stack.n_dna_samples), get_random_position(NN.size), NN)
-#     NN.n_counter += 1
-#
-#     append!(NN.components, [n])
-#     return n
-# end
 function add_neuron!(NN::Network, layer::Integer, init_pos::Position)
     n = unfold(rand(NN.dna_stack.n_dna_samples), layer, init_pos, NN)
     NN.n_counter += 1
@@ -391,21 +386,6 @@ function add_neuron!(NN::Network, layer::Integer, init_pos::Position)
     append!(NN.components, [n])
     return n
 end
-# function add_dendrite!(NN::Network, N::Neuron)
-#     if has_empty_prior(N)
-#         for i in eachindex(N.priors)
-#             if ismissing(N.priors[i])
-#                 d = AllCell(Dendrite(N.position + get_random_position(NN.den_and_ap_init_range)))
-#                 d.cell.position = rectify_position(d.cell.position, NN.size)
-#
-#                 N.priors[i] = d
-#                 append!(NN.components, [d])
-#                 NN.den_counter += 1
-#                 return nothing
-#             end
-#         end
-#     end
-# end
 function add_dendrite!(NN::Network, N::Neuron, layer::Integer, init_pos::Position)
     if has_empty_prior(N)
         for i in eachindex(N.priors)
@@ -420,21 +400,6 @@ function add_dendrite!(NN::Network, N::Neuron, layer::Integer, init_pos::Positio
         end
     end
 end
-# function add_axon_point!(NN::Network, N::Neuron)
-#     if has_empty_post(N)
-#         for i in eachindex(N.posteriors)
-#             if ismissing(N.posteriors[i])
-#                 ap = AllCell(AxonPoint(N.position + get_random_position(NN.den_and_ap_init_range)))
-#                 ap.cell.position = rectify_position(ap.cell.position, NN.size)
-#
-#                 N.posteriors[i] = ap
-#                 append!(NN.components, [ap])
-#                 NN.ap_counter += 1
-#                 return nothing
-#             end
-#         end
-#     end
-# end
 function add_axon_point!(NN::Network, N::Neuron, layer::Integer, init_pos::Position)
     if has_empty_post(N)
         for i in eachindex(N.posteriors)
@@ -449,34 +414,6 @@ function add_axon_point!(NN::Network, N::Neuron, layer::Integer, init_pos::Posit
         end
     end
 end
-
-
-# function runtime_instantiate_components!(NN::Network, iteration::Integer) # instantiate neurons, dendrites and ap's depending on iteration
-#     for n in get_all_neurons(NN)
-#         if iteration % n.den_init_interval == 0
-#             add_dendrite!(NN, n)
-#         end
-#         if iteration % n.ap_init_interval == 0
-#             add_axon_point!(NN, n)
-#         end
-#     end
-#     if iteration % NN.neuron_init_interval == 0
-#         add_neuron!(NN)
-#     end
-# end
-# function populate_network!(NN::Network, num_neurons::Integer, num_priors::Integer, num_post::Integer, init_pos)
-#     for n in 1:num_priors+num_post:num_neurons*(num_priors+num_post)
-#         # add_neuron! adds it to component list as well
-#         cn = add_neuron!(NN, init_pos[n])
-#
-#         for i in 1:num_priors
-#             add_dendrite!(NN, cn, init_pos[n+i])
-#         end
-#         for j in 1:num_post
-#             add_axon_point!(NN, cn, init_pos[n+num_priors+j])
-#         end
-#     end
-# end
 function reset_network_components!(NN::Network)
     if get_all_neurons(NN) != []
         for n in get_all_neurons(NN)
@@ -489,9 +426,6 @@ function reset_network_components!(NN::Network)
         end
     end
 end
-
-
-# VERIFICATION FUNCTIONS
 function clean_network_components!(NN::Network, num_layers::Integer)
     NN.components = collect(skipmissing(NN.components))
 

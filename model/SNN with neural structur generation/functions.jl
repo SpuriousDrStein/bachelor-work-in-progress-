@@ -5,12 +5,13 @@ import Distributions
 using Random
 using StatsBase
 
-include(".\\..\\..\\global_utility_functions\\activation_functions.jl")
+# include activation and utility functions
+include("activation_functions.jl")
 include("utility_functions.jl")
+
+# include the network operations and the evolutionary network functions (including the main loop)
 include("network_operation_functions.jl")
 include("evolutionary_network_generation.jl")
-
-
 
 # MULTIPLE DISPATCH
 import Base.+, Base.-, Base./, Base.^, Base.*, Base.==, Base.!=
@@ -24,13 +25,11 @@ function ^(p::Position, pow::Integer); [p.x, p.y] .^ pow; end
 function *(p::Position, n::Number); Position(([p.x, p.y] .* n)...); end
 function ==(p1::Position, p2::Position); all([p1.x == p2.x, p1.y == p2.y]); end
 function !=(p1::Position, p2::Position); all([p1.x != p2.x, p1.y != p2.y]); end
-function vec_mean(p1::Position, p2::Position); Position((p1 + p2) ./ 2.); end
 function copy(p::Position); Position(copy(p.x), copy(p.y)); end
 function abs(p::Position); Position([abs(p.x), abs(p.y)]...); end
 function sample(mean::FloatN, global_stdv::FloatN); rand(Normal(mean, global_stdv)); end
 function normalize(p::Position); [p.x, p.y] ./ vector_length(p); end
 function normalize(v::Vector); v ./ vector_length(v); end
-
 
 
 # VISUALIZATION
@@ -48,9 +47,9 @@ function display_timestep(positions, connections, params, episode, iteration) # 
         plot!([c[1].x, c[2].x], [c[1].y, c[2].y], c="red", linewidth=0.1, linealpha=0.6, l=:arrow)
     end
 
-    # for l in 1:((length(params["LAYERS"])-2)*2+1)
-    #     plot!([cos.(-π:0.001:π).*((params["NETWORK_SIZE"]/((length(params["LAYERS"])-2)*2+1))*l)], [sin.(-π:0.001:π).*((params["NETWORK_SIZE"]/((length(params["LAYERS"])-2)*2+1))*l)], linealpha=0.3)
-    # end
+    for l in 1:((length(params["LAYERS"])-2)*2+1)
+        plot!([cos.(-π:0.001:π).*((params["NETWORK_SIZE"]/((length(params["LAYERS"])-2)*2+1))*l)], [sin.(-π:0.001:π).*((params["NETWORK_SIZE"]/((length(params["LAYERS"])-2)*2+1))*l)], linealpha=0.2)
+    end
 
     p2 = scatter(grid=false, showaxis=false, xlims=(0,0))
     scatter!([0], label="neurons", c="blue")

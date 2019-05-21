@@ -1,8 +1,7 @@
-# BASIC
-to_degree(x) = x*180/π
+# basic utility
+function to_degree(x); x*180/π; end
 
-
-# QUERY FUNCTIONS
+# query functions
 get_dendrites(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == Dendrite]
 get_axon_points(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == AxonPoint]
 get_synapses(x::Array{AllCell}) = [n.cell for n in x if typeof(n.cell) == Synaps]
@@ -33,7 +32,7 @@ get_dendrites(subnet::Subnet, den_collection::Array{Dendrite}) = [d for d in ski
 get_axon_points(subnet::Subnet, ap_collection::Array{AxonPoint}) = [ap for ap in skipmissing(ap_collection) if distance(ap.position, subnet.position) <= subnet.range]
 get_synapses(subnet::Subnet, syn_collection::Array{Synaps}) = [syn for syn in skipmissing(syn_collection) if distance(syn.position, subnet.position) <= subnet.range]
 
-
+# disjointed fitness accumulation
 function tally_up_fitness!(NN::Network)
     for n in get_all_neurons(NN)
         p_syns = get_synapses(get_prior_all_cells(n))
@@ -49,19 +48,26 @@ function tally_up_fitness!(NN::Network)
     end
 end
 
+
+# position functions
 direction(from::Position, to::Position) = [to.x, to.y] .- [from.x, from.y]
 distance(p1::Position, p2::Position) = sqrt(sum(direction(p1, p2).^2))
 vector_length(p::Position) = sqrt(sum([p.x, p.y].^2))
 vector_length(v::Vector) = sqrt(sum(v.^2))
-
+vec_mean(p1::Position, p2::Position) = Position((p1 + p2) ./ 2.)
 function get_random_position(range)
     return Position(rand(Distributions.Uniform(-range, range)), rand(Distributions.Uniform(-range, range)))
 end
-
 function change_length(position::Position, length)
     Position((normalize(position) .* length)...)
 end
-
+function rectify_position(p::Position, len::FloatN)
+    if distance(p, Position(0,0)) > len
+        return Position((normalize(p) * len)...)
+    else
+        return p
+    end
+end
 function get_all_relations(NN::Network)
     np = []
     app = []
@@ -102,16 +108,8 @@ function get_all_relations(NN::Network)
     end
 end
 
-function rectify_position(p::Position, len::FloatN)
-    if distance(p, Position(0,0)) > len
-        return Position((normalize(p) * len)...)
-    else
-        return p
-    end
-end
 
-
-# INITIALIZATION SAMPELING
+# initialization functions
 function initialize_network(
                 net_size::FloatN,
                 global_stdv::FloatN,
@@ -167,7 +165,6 @@ function initialize_network(
                     0, 0, 0, 0, 0,
                     n_dest_thresh, s_dest_thresh)
 end
-
 function unfold(dna::NeuroTransmitterDNA, NN::Network)::NeuroTransmitter
     str = clamp(dna.init_strength, 0.1, NN.max_nt_strength)
     return NeuroTransmitter(str)
@@ -188,7 +185,7 @@ function unfold(dna::NeuronDNA, layer::Integer, pos::Position, NN::Network)::Neu
 end
 
 
-# RECTIFICATION FUNCTIONS
+# rectification functions
 function rectify!(dna::NeuroTransmitterDNA, NN::Network)
     a = copy(dna.init_strength)
 
@@ -212,7 +209,6 @@ function rectify!(dna::NeuronDNA, NN::Network)
     dna.THR = clamp(dna.THR, 0.5, NN.max_n_threshold)
     return thr != dna.THR
 end
-
 function rectify!(dna::DNAStack, NN::Network)
     s = 0
     for nt in dna.nt_dna_samples

@@ -1,6 +1,6 @@
-
-
-# FUNCTIONS
+# initialize a network
+# based on a stack of parameters
+# and a stack of init positions
 function initialize(dna_stack, init_positions, params)
     nn = initialize_network(
                 params["NETWORK_SIZE"],
@@ -21,17 +21,11 @@ function initialize(dna_stack, init_positions, params)
                 params["MAX_SYNAPTIC_THRESHOLD"],
                 # params["LIFE_DECAY"],
                 params["NT_RETAIN_PERCENTAGE"],
-                # params["NEURON_INIT_INTERVAL"],
-                # params["AP_DEN_INIT_INTERVAL"],
                 params["MAX_NUM_PRIORS"],
                 params["MAX_NUM_POSTERIORS"],
                 params["NEURON_DESTRUCTION_THRESHOLD"],
                 params["SYNAPS_DESTRUCTION_THRESHOLD"],
                 dna_stack)
-
-    # if length(params["LAYERS"]) % 2 != 0
-    #     throw("Layers have to be even in number")
-    # end
 
     num_pr = params["INIT_PRIORS"]
     num_po = params["INIT_POSTERIORS"]
@@ -41,7 +35,7 @@ function initialize(dna_stack, init_positions, params)
     os = params["LAYERS"][end]
     lays = length(n_per_l) # basically #neuron_layers + #connection_layers
 
-    I = 1
+    I = 1 # counter for readability
     for i in I:is
         append!(nn.IO_components, [AllCell(InputNode(lays*2+1, init_positions[i], 0., false))])
     end
@@ -50,13 +44,6 @@ function initialize(dna_stack, init_positions, params)
         append!(nn.IO_components, [AllCell(OutputNode(1, init_positions[is+i], 0., false))])
     end
     I += os
-
-    # println(length(init_positions))
-
-    # num_neurons = 7
-    # num_connections = 6
-    # num_layers = 7+6+2
-    # [inp, n, c, n, c, n, c, n, out]
 
     for l in 2:2:(lays*2)
         num_n = n_per_l[Integer(ceil(l/2))]
@@ -73,26 +60,11 @@ function initialize(dna_stack, init_positions, params)
         end
         I += num_n + (num_n*num_pr) + (num_n*num_po)
     end
-
-    # # populate network with segmentation [input positions, output positions, neuron positions, dendrite positions, axon point positions]
-    # for dpi in is+os+i_nn:i_nn:is+os+i_nn+(i_nden*i_nn)
-    #     for (i, n) in enumerate(get_all_neurons(nn))
-    #         add_dendrite!(nn, n, init_positions[dpi+i])
-    #     end
-    # end
-    # for appi in is+os+i_nn+(i_nden*i_nn):i_nn:is+os+i_nn+(i_nden*i_nn)+(i_nap*i_nn)-1
-    #     for (i, n) in enumerate(get_all_neurons(nn))
-    #         add_axon_point!(nn, n, init_positions[appi+i])
-    #     end
-    # end
-    # nn.IO_components = [input_nodes..., out_nodes...]
-
     return nn
 end
 
 
-
-
+# position sampeling methods
 function get_positions(x, p)
     inn = p["LAYERS"][1] + p["LAYERS"][end] + sum(p["LAYERS"][2:end-1]) + (sum(p["LAYERS"][2:end-1]) * p["INIT_PRIORS"]) + (sum(p["LAYERS"][2:end-1]) * p["INIT_POSTERIORS"])
     # inn = sum(params["LAYERS"][2:end-1]) + (sum(params["LAYERS"][2:end-1]) * params["INIT_PRIORS"]) + (sum(params["LAYERS"][2:end-1]) * params["INIT_POSTERIORS"])
@@ -136,6 +108,7 @@ function get_random_init_positions(p)
 end
 
 
+# dna sampeling methods
 function get_dna(x, params)
     d = params["DNA_SAMPLE_SIZE"] # because shorter indexing
 
@@ -147,9 +120,6 @@ function get_dna(x, params)
 
     return dna_stack
 end
-
-
-
 function sample_from_set_plain(x, p)
     d = p["DNA_SAMPLE_SIZE"] # because shorter indexing
     stdv = p["GLOBAL_STDV"]
@@ -171,7 +141,6 @@ function sample_from_set_plain(x, p)
 
     return dna_stack, xx
 end
-
 function get_random_set(p)
     d = p["DNA_SAMPLE_SIZE"] # because shorter indexing
 
@@ -192,7 +161,6 @@ function get_random_set(p)
 
     return dna_stack, xx
 end
-
 function sample_from_set_scaled(x, p; scl=1.)
     d = p["DNA_SAMPLE_SIZE"] # because shorter indexing
     stdv = p["GLOBAL_STDV"]
@@ -214,7 +182,6 @@ function sample_from_set_scaled(x, p; scl=1.)
 
     return dna_stack, xx
 end
-
 function sample_from_sets_random(sets, p)
     d = p["DNA_SAMPLE_SIZE"] # because shorter indexing
     stdv = p["GLOBAL_STDV"]
@@ -237,14 +204,7 @@ function sample_from_sets_random(sets, p)
     return dna_stack, xx
 end
 
-function sample_from_set_decay(x, p, j)
-end
-
-function sample_from_set_scaled_decay(x, p, j; scl=0.3)
-end
-
-
-
+# unsupervised training methods
 function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterations::Integer, parallel_networks::Integer, env, env_version, params::Dict)
     env = GymEnv(env, env_version)
     action_index = [i for i in 1:length(env.actions)]
@@ -326,38 +286,36 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
                 reset_network_components!(net)
 
                 for i in 1:iterations
-                    # for Acrobot
                     s = Array(s)
-                    state = [s[1]>0, s[1]<0, s[2]>0, s[2]<0, s[3]>0, s[3]<0]# [(s[2] > 0), (s[2] < 0), (s[4] > 0), (s[4] < 0)]
+                    state = [s[1]>0, s[1]<0, s[2]>0, s[2]<0, s[3]>0, s[3]<0]# for acrobot use -> [(s[2] > 0), (s[2] < 0), (s[4] > 0), (s[4] < 0)]
 
+                    # compute as many network steps as neuron layers
                     for _ in 1:length(params["LAYERS"][2:end-1])
                         den_sinks, den_surges, ap_sinks, ap_surges = value_step!(net, state)
                         state_step!(net, den_sinks, den_surges, ap_sinks, ap_surges)
                         clean_network_components!(net, ((length(params["LAYERS"])-2)*2+1))
-                        # runtime_instantiate_components!(net, I)
                     end
 
-                    I += 1
 
 
                     if I % 50 == 0
                         if !all([inn.referenced for inn in get_input_nodes(net)]) && get_all_neurons(net) != []
                             net.total_fitness -= 1000
-                            # add_dendrite!(net, rand(get_all_neurons(net)))
                         end
                         if !all([onn.referenced for onn in get_output_nodes(net)]) && get_all_neurons(net) != []
                             net.total_fitness -= 1000
-                            # add_axon_point!(net, rand(get_all_neurons(net)))
                         end
                     end
+                    I += 1
 
-                    # println([nnn.Q for nnn in get_all_neurons(net)])
 
+                    # get output
                     out = get_output_nodes(net)
                     out = [out[on].value + out[on+1].value for on in 1:2:length(out)]
                     a = action_space[argmax(out)]
                     r, s = step!(env, a)
 
+                    # assign environment return
                     if to_degree(s[3]) >= -12 && to_degree(s[3]) <= 12
                         net.total_fitness += 50
                         sum_env_rewards += 50
@@ -379,6 +337,7 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
             # println("#axon points -- $(net.ap_counter)")
             # println("#synapses    -- $(net.syn_counter)")
 
+            # append recorings to metrics
             append!(metrics["net_$(n)_env_reward"], [sum_env_rewards])
             append!(metrics["net_$(n)_execution_time"], [time()-t])
             append!(metrics["net_$(n)_num_neurons"], [net.n_counter])
@@ -390,13 +349,14 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
                 append!(metrics["net_$(n)_synaps_fitness"], [0])
             end
 
+            # calculate the full fitness and append to parallel network buffer
             tally_up_fitness!(net)
-
 
             append!(nets, [(net.total_fitness => copy(x))])
             append!(net_poss, [(net.total_fitness => copy(p))])
         end
 
+        # replace dna and position buffer enteries if higher fitness is recorded
         for cn in nets
             if cn[1] > sort(best_nets_buf)[1][1]
                 sort(best_nets_buf)[1] .= copy.(cn)
@@ -408,17 +368,18 @@ function unsupervised_train(net_episodes::Integer, env_episodes::Integer, iterat
             end
         end
 
+
         println("best_net_rewards: $([bn[1] for bn in best_nets_buf])")
 
         for pln in 1:parallel_networks
             append!(metrics["net_$(pln)_current_fitness"], [nets[pln][1]])
         end
-
     end
     return best_nets_buf, best_init_pos, metrics
 end
 
 
+# unsupervised testing
 function unsupervised_test(sample, init_positions, episodes::Integer, iterations::Integer, env, env_version, params::Dict, render)
     env = GymEnv(env, env_version)
     action_index = [i for i in 1:length(env.actions)]
@@ -436,7 +397,6 @@ function unsupervised_test(sample, init_positions, episodes::Integer, iterations
         reset_network_components!(net)
 
         for i in 1:iterations
-            # for Acrobot
             state = Array(s)
             state = [s[1]>0,s[1]<0, s[2]>0,s[2]<0, s[3]>0,s[3]<0]# [(s[2] > 0), (s[2] < 0), (s[4] > 0), (s[4] < 0)]
 
@@ -448,6 +408,7 @@ function unsupervised_test(sample, init_positions, episodes::Integer, iterations
                 # runtime_instantiate_components!(net, I)
             end
 
+            # append positions and connections to the metric
             positions, connections = get_all_relations(net) # returns [np, app, denp, synp, inp, outp], connections
             if "episode_$(e)_positions" in keys(metrics)
                 append!(metrics["episode_$(e)_positions"], [positions])
