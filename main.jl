@@ -5,52 +5,33 @@ using DelimitedFiles, CSV, DataFrames
 
 
 # NETWORK HP's
-init_params =   Dict("NETWORK_SIZE"                 => FloatN(10),
-                "GLOBAL_STDV"                       => FloatN(0.5),
-                "INIT_POSITION_STDV"                => FloatN(1),
-                # "NEURON_LIFETIME"                   => FloatN(100000),
-                # "SYNAPTIC_LIFETIME"                 => FloatN(100000),
-                # "DENDRITE_LIFETIME"                 => FloatN(100000),
-                # "AXONPOINT_LIFETIME"                => FloatN(100000),
-                # "NEURON_REPEL_FORCE"                => FloatN(0),
-                # "LIFE_DECAY"                        => FloatN(1.),
+init_params =   Dict(
+                "NUMBER_OF_NEURONS"                 => 10,
+                "NEURON_REPEL_FORCE"                => FloatN(0),
                 "MIN_FUSE_DISTANCE"                 => FloatN(0.3),
                 "AP_SINK_ATTRACTIVE_FORCE"          => FloatN(2), # force:    AxonPoint's -> ap_sinks
                 "DEN_SURGE_REPULSIVE_FORCE"         => FloatN(3), # repulsive force of den/occupied input -> den
                 "AP_SURGE_REPULSIVE_FORCE"          => FloatN(2), # repulsive force of ap/occupied output -> ap
                 "INPUT_ATTRACTIVE_FORCE"            => FloatN(6),
                 "OUTPUT_ATTRACTIVE_FORCE"           => FloatN(6),
-                "MAX_SYNAPTIC_THRESHOLD"            => FloatN(4),
-                "MAX_NEURON_THRESHOLD"              => FloatN(5),
-                "NEURON_DESTRUCTION_THRESHOLD"      => FloatN(0.3),
-                "SYNAPS_DESTRUCTION_THRESHOLD"      => FloatN(0.5),
                 "MAX_NT_STRENGTH"                   => FloatN(1),
                 "NT_RETAIN_PERCENTAGE"              => FloatN(1),
-                "MAX_RESISTANCE"                    => FloatN(2),
-                "MAX_NUM_PRIORS"                    => 10,
-                "MAX_NUM_POSTERIORS"                => 10,
-                "INIT_PRIORS"                       => 3,
-                "INIT_POSTERIORS"                   => 3,
                 "LAYERS"                            => [6,6,6,4],
-                # "NEURON_INIT_INTERVAL"              => 10000,
-                # "AP_DEN_INIT_INTERVAL"              => 5000, # a minimum to negate the possibility of calling the add_dendrite or add_axon_point function every timestep
-                "TOP_BUFFER_LENGTH"                 => 12,
-                "DNA_SAMPLE_SIZE"                   => 1)
-                # "DATA_INPUT_SIZE"                   => 6,
-                # "DATA_OUTPUT_SIZE"                  => 2)
+                "NEURON_INIT_INTERVAL"              => 10000,
+                # move to local-param <-- "AP_DEN_INIT_INTERVAL"              => 5000, # a minimum to negate the possibility of calling the add_dendrite or add_axon_point function every timestep
 
 net_episodes = 100
 env_episodes = 25
-iterations = 140
-parallel_networks = 10
-test_episodes = 30
+env_steps = 140
+network_batch_size = 10
+env_test_steps = 30
 env = :CartPole
 v = :v1
 # cart pole state = [ Cart Position, Cart Velocity, Pole Angle, Pole Velocity At Tip ]
 # Acrobot state = [cos(theta1) sin(theta1) cos(theta2) sin(theta2) thetaDot1 thetaDot2]
 
 # run environment
-best_dna, best_init_pos, metrics = unsupervised_train(net_episodes, env_episodes, iterations, parallel_networks, env, v, init_params)
+best_dna, best_init_pos, metrics = unsupervised_train(net_episodes, env_episodes, env_steps, network_batch_size, env, v, init_params)
 # print execution time
 println("training time = ", sum(sum(metrics["net_$(n)_execution_time"] for n in 1:parallel_networks))/60, " minutes")
 

@@ -1,151 +1,91 @@
-# GENERAL STRUCTURES
-FloatN = Float32
-mutable struct Position
-    x::FloatN
-    y::FloatN
-end
-mutable struct Surge
-    layer::Integer
-    position::Position
-    strength::FloatN
-end
-mutable struct Sink
-    layer::Integer
-    position::Position
-    strength::FloatN
+mutable struct edge
+    VAL::Float16
+
+    thr::Float16
+    res_coef::Float16 # recovery speed
 end
 
+mutable struct node
+    VAL::Float16
 
-
-# DNA STRUCTURES
-mutable struct NeuroTransmitterDNA
-    init_strength::FloatN # mean should be 1 for most "accurate" effect
-end
-mutable struct SynapsDNA
-    THR::FloatN
-    r_rec::FloatN
-    maxR::FloatN
-end
-mutable struct NeuronDNA
-    THR::FloatN
-end
-mutable struct DNAStack
-    nt_dna_samples::Array{NeuroTransmitterDNA}
-    syn_dna_samples::Array{SynapsDNA}
-    n_dna_samples::Array{NeuronDNA}
+    thr::Float16
+    phase::Float16
 end
 
+mutable struct neuron
+    nucleus::node
+    dendrites::AbstractArray{edge}
+    axons::AbstractArray{edge}
+end
 
-# NETWORK STRUCTURES
-mutable struct InputNode
-    layer::Integer
-    position::Position
-    value::FloatN
-    referenced::Bool
-end
-mutable struct OutputNode
-    layer::Integer
-    position::Position
-    value::FloatN
-    referenced::Bool
-end
-mutable struct NeuroTransmitter # small possitive or small negative
-    strength::FloatN
-end
-mutable struct Dendrite
-    # constants
-    # lifeTime::FloatN
-    layer::Integer
+[neuron(node(0,1,0), [edge(0,1)], [edge(0,1)]) for _ in 1:10]
 
-    # change at t
-    position::Position
-end
-mutable struct AxonPoint
-    # constants
-    # lifeTime::FloatN
-    layer::Integer
+function feed_forward!(dt, neurons::neuron...)
+    for n in neurons
+        for e in n.dendrites
+            e.VAL += dt * e.res_coef
+            e.VAL += dt * cos(e.freq_coef)
 
-    # change at t
-    position::Position
-end
-mutable struct Synaps
-    # constants
-    # lifeTime::FloatN
-    layer::Integer
+            if e.VAL >= e.thr
+                n.nucleus.VAL += e.VAL
+                e.res_coef += e.VAL - e.thr
+                e.VAL = 0
+            end
+        end
 
-    # change at t
-    position::Position
-    NT::NeuroTransmitter
-    Q::FloatN
-    THR::FloatN
-    R::FloatN
-    RRecovery::FloatN # how quickly the value comes back up again
-    maxR::FloatN
-
-    total_fitness::FloatN
-    d_total_fitness::FloatN
-    destruction_threshold::FloatN
+        if n.nucleus.VAL >= n.nucleus.thr
+            for e in n.axons
+                e.VAL += dt * n.nucleus.VAL
+            end
+            n.nucleus.VAL = 0
+        end
+    end
 end
-mutable struct AllCell
-    cell::Union{AxonPoint, Dendrite, Synaps, InputNode, OutputNode}
-end
-mutable struct Neuron
-    # constants
-    # den_init_interval::Integer
-    # ap_init_interval::Integer
-    layer::Integer
 
-    # change at t
-    position::Position
-    # lifeTime::FloatN
-    Q::FloatN
-    THR::FloatN
+# conectum
+'''
+     A  B  C
+A   |x||_||_|
+B   |_||x||_|
+C   |_||_||x|
+'''
 
-    priors::Array{Union{Missing, AllCell}, 1}
-    posteriors::Array{Union{Missing, AllCell}, 1}
+mutable struct conectum
+    connections::AbstractArray{edge}
+end
 
-    total_fitness::FloatN
-    d_total_fitness::FloatN
-    destruction_threshold::FloatN
+mutable struct RNN_Runner_agent
+    buffer_size::Integer
+    input_buffer::AbstractArray{AbstractFloat}
+    hidden_buffer::AbstractArray{AbstractFloat}
+    xh_w_buffer::AbstractArray{AbstractFloat}
+    xh_b_buffer::AbstractArray{AbstractFloat}
+    hh_w_buffer::AbstractArray{AbstractFloat}
+    hh_b_buffer::AbstractArray{AbstractFloat}
+    hy_w_buffer::AbstractArray{AbstractFloat}
+    hy_b_buffer::AbstractArray{AbstractFloat}
 end
-mutable struct Subnet # may be used for more update by predetermined references or for neurotransmitter dispersion
-    position::Position
-    range::FloatN
-end
-mutable struct Network
-    # constants
-    size::FloatN
-    global_stdv::FloatN
-    # neuron_lifetime::FloatN
-    # synaps_lifetime::FloatN
-    # dendrite_lifetime::FloatN
-    # axon_point_lifetime::FloatN
-    min_fuse_distance::FloatN
-    ap_sink_attractive_force::FloatN # force: AxonPoint's -> ap_sinks
-    ap_surge_repulsive_force::FloatN
-    den_surge_repulsive_force::FloatN
-    input_attraction_force::FloatN
-    output_attraction_force::FloatN
-    # neuron_repel_force::FloatN
-    max_nt_strength::FloatN
-    max_n_threshold::FloatN
-    max_s_threshold::FloatN
-    # life_decay::FloatN
-    nt_retain_percentage::FloatN
-    # neuron_init_interval::Integer
-    # ap_den_init_interval::Integer
-    max_num_priors::Integer
-    max_num_posteriors::Integer
-    dna_stack::DNAStack
 
-    # change at t
-    components::Array{Union{Missing, AllCell, Neuron}, 1}
-    IO_components::Array{Union{AllCell}, 1}
-    total_fitness::FloatN
-    n_counter::Integer
-    syn_counter::Integer
-    den_counter::Integer
-    ap_counter::Integer
-    n_destruction_threshold::FloatN
-    s_destruction_threshold::FloatN
+raw(e::edge) = [copy(e.thr), copy(e.res_coef)]
+raw(n::node) = [copy(n.thr), copy(n.phase)]
+
+function run_agent!(x::AbstractArray, runner::RNN_Runner_agent)
+    h_t = x * xh_w_buffer[end] .+ xh_b_buffer[end]
+    h_t1 = h_t * hh_w_buffer[end] .+ hh_b_buffer[end] # x=512 -> 512xh_size -> h_size -> h_sizexh_size -> h_size
+
+    # dxhw_dy = hidden_buffer[end]
+    # dhhw_dy = dht_dy * hidden_buffer[end-1]
+    # dxhw_dw = dht_dy * dht1_dht * input_buffer[end]
+
+    # PUT IN LOOP
+
+    # append input & hidden
+    if length(runner.input_buffer) <= unner.buffer_size
+        append!(runner.hidden_buffer, h_t)
+        append!(runner.xh_w_buffer, )
+    else
+        # shift up
+    end
 end
+
+function train_agent()
