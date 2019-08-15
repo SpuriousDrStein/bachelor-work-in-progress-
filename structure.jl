@@ -1,7 +1,5 @@
-d_UT = 0.01 # update time
-d_RT = 0.5 # reaction time
-d_GT = 1 # growth time
 
+# STRUCTURE
 mutable struct edge
     VAL::Float16
 
@@ -18,20 +16,33 @@ mutable struct node
 end
 
 conectum = AbstractArray{Union{edge, Missing}, 2}
-neuron_layer = AbstrVector{node}
+mask = AbstractArray{Bool, 2}
+neuron_layer = AbstractVector{node}
+network = AbstractVector{Union{neuron_layer, conectum, mask}}
 
-function feed_forward!(nl1::neuron_layer, nl2::neuron_layer, em::edge_matrix, x::AbstractVector, d_ut::Float16)
-    for n1 in eachindex(nl1)
+# UTILITY FUNCTIONS
+function Base.getindex(n::node, i::Integer); return n[i]; end
+raw(e::edge) = [copy(e.thr), copy(e.res_coef), copy(freq_coef)]
+raw(n::node) = [copy(n.thr), copy(n.res_coef), copy(phase)]
+function Base.copy(x::neuron_layer); return collect(Iterators.flatten([raw(l) for l in x])); end
+function Base.copy(x::conectum); return collect(Iterators.flatten([raw(l) for l in x])); end
+
+
+
+
+# OTHER ///UC (under construction)
+function feed_forward!(nl1::neuron_layer, nl2::neuron_layer, em::conectum, x::AbstractVector, d_ut::Float16)
+    for n1 in eachindex(nl1, x)
         nl1[n1].VAL += x[n1]
         nl1[n1].VAL += d_ut * cos(nl1[n1].phase)
         nl1[n1].res_coef += d_ut * (nl1[n1].VAL - nl1[n1].thr) # negative if not fiering -> making the resistance coeff negative -> increase probabilty of fiering
 
         if nl1[n1].VAL >= nl1[n1].thr
             for axon in em[n1, :]
-                edg.VAL += nl1[n1].thr
-                edg.VAL += d_ut * edg.res_coef
-                edg.VAL += d_ut * cos(edg.freq_coef)
-                edg.res_coef += d_ut * (edg.VAL - edg.thr)
+                axon.VAL += nl1[n1].thr
+                axon.VAL += d_ut * axon.res_coef
+                axon.VAL += d_ut * cos(axon.freq_coef)
+                axon.res_coef += d_ut * (axon.VAL - axon.thr)
             end
             nl1[n1].VAL = 0
         end
@@ -45,12 +56,59 @@ function feed_forward!(nl1::neuron_layer, nl2::neuron_layer, em::edge_matrix, x:
                 den.VAL = 0
             end
         end
-        append(out, [nl2[n2].thr * (nl2[n2].VAL >= nl2[n2].thr)])
+        append!(out, [nl2[n2].thr * (nl2[n2].VAL >= nl2[n2].thr)])
     end
 
     return out
 end
 
+function get_param_count(hidden_sizes::AbstractVector)
+    s = sum(hidden_sizes)
+    for h in eachindex(hidden_sizes)[1:end-1]
+        s += hidden_sizes[h] * hidden_sizes[h+1]
+    end
+    return s
+end
+
+function construct_network(params::AbstractVector, hidden_sizes::AbstractVector; number_of_edge_params=3, number_of_node_params=3)::network
+    ret_net = network([])
+    it = 1
+    for i in length(hidden_sizes)-1
+        neuron_param_ind   = it + hidden_sizes[i] * number_of_node_params
+        conectum_param_ind = neuron_param_ind + hidden_sizes[i] * hidden_sizes[i+1] * number_of_edge_params
+        mask_param_ind     = conectum_param_ind + hidden_sizes[i] * hidden_sizes[i+1]
+
+        append!(ret_net, [neuron_layer(params[it:neuron_param_ind])])
+        append!(ret_net, [conectum(reshape(params[neuron_param_ind+1:conectum_param_ind]), (hidden_sizes[i], hidden_sizes[i+1]))])
+        append!(ret_net, [mask(reshape(params[conectum_param_ind+1:mask_param_ind], (hidden_sizes[i], hidden_sizes[i+1])))])
+
+        it += neuron_params + conectum_params + mask_params
+    end
+
+    return ret_net
+end
+
+function deconstruct_network(net::network)
+    ret_par = []
+    for layer in net
+        if typeof(layer) == neuron_layer
+            append!(ret_par, [copy(layer)])
+        elseif typeof(layer) == conectum
+            append!(ret_par, [copy(layer)])
+        elseif typeof(layer) == mask
+            append!(ret_par, [copy(layer)])
+        end
+    end
+    return ret_par
+end
+
+function apply_mask!(cons::conectum, m::mask)
+    for i in eachindex(cons, m)
+        if !m[i]
+            cons[i] = missing
+        end
+    end
+end
 
 mutable struct RNN_Runner_agent
     buffer_size::Integer
@@ -63,9 +121,6 @@ mutable struct RNN_Runner_agent
     hy_w_buffer::AbstractArray{AbstractFloat}
     hy_b_buffer::AbstractArray{AbstractFloat}
 end
-
-raw(e::edge) = [copy(e.thr), copy(e.res_coef)]
-raw(n::node) = [copy(n.thr), copy(n.phase)]
 
 function run_agent!(x::AbstractArray, runner::RNN_Runner_agent)
     h_t = x * xh_w_buffer[end] .+ xh_b_buffer[end]
@@ -86,35 +141,23 @@ function run_agent!(x::AbstractArray, runner::RNN_Runner_agent)
     end
 end
 
-function train_agent()
-end
-# Q-table -> sigmoid -> board-mask
-#  board-mask
 
 
-function get_mask(con::conectum)
-    # axon = 'a'
-    # dendrite = 'd'
-    # nucleus = 'n'
-    # missing = 'x'
 
-    out = []
-    for i in eachindex(conectum)
-        if typeof(conectum[i]) == node
-            append!(out[i], 'n')
-        elseif typeof(conectum[i]) == edge
-            append!(out[i], 'x')
-        else
-            append!(out[i], 'x')
-        end
-    end
-    return reshape(out, ())
-end
+# TEST
 
-function get_param_count(hidden_sizes::AbstractVector)
-    s = 0
-    for h in eachindex(hidden_sizes)[1:end-1]
-        s += hidden_sizes[h] * hidden_sizes[h+1]
-    end
-    return s
-end
+X = rand(20)
+input_size = length(X)
+hidden_sizes = [15, 10, 5, 2]
+d_UT = 0.01 |> Float16 # update time
+d_RT = 0.5 |> Float16 # reaction time
+d_GT = 1 |> Float16 # growth time
+
+nl1 = neuron_layer([node(rand(4)...) for _ in 1:input_size])
+nl2 = neuron_layer([node(rand(4)...) for _ in 1:input_size])
+con = conectum(reshape([edge(rand(4)...) for _ in 1:input_size^2], (input_size, input_size)))
+net = network([nl2, nl1, con])
+feed_forward!(nl1, nl2, con, X, d_UT) |> println
+
+deconstruct_network(net)
+construct_network()
