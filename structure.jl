@@ -1,58 +1,56 @@
+d_UT = 0.01 # update time
+d_RT = 0.5 # reaction time
+d_GT = 1 # growth time
+
 mutable struct edge
     VAL::Float16
 
     thr::Float16
     res_coef::Float16 # recovery speed
+    freq_coef::Float16 # frequency
 end
-
 mutable struct node
     VAL::Float16
 
     thr::Float16
+    res_coef::Float16
     phase::Float16
 end
 
-mutable struct neuron
-    nucleus::node
-    dendrites::AbstractArray{edge}
-    axons::AbstractArray{edge}
-end
+conectum = AbstractArray{Union{edge, Missing}, 2}
+neuron_layer = AbstrVector{node}
 
-[neuron(node(0,1,0), [edge(0,1)], [edge(0,1)]) for _ in 1:10]
+function feed_forward!(nl1::neuron_layer, nl2::neuron_layer, em::edge_matrix, x::AbstractVector, d_ut::Float16)
+    for n1 in eachindex(nl1)
+        nl1[n1].VAL += x[n1]
+        nl1[n1].VAL += d_ut * cos(nl1[n1].phase)
+        nl1[n1].res_coef += d_ut * (nl1[n1].VAL - nl1[n1].thr) # negative if not fiering -> making the resistance coeff negative -> increase probabilty of fiering
 
-function feed_forward!(dt, neurons::neuron...)
-    for n in neurons
-        for e in n.dendrites
-            e.VAL += dt * e.res_coef
-            e.VAL += dt * cos(e.freq_coef)
-
-            if e.VAL >= e.thr
-                n.nucleus.VAL += e.VAL
-                e.res_coef += e.VAL - e.thr
-                e.VAL = 0
+        if nl1[n1].VAL >= nl1[n1].thr
+            for axon in em[n1, :]
+                edg.VAL += nl1[n1].thr
+                edg.VAL += d_ut * edg.res_coef
+                edg.VAL += d_ut * cos(edg.freq_coef)
+                edg.res_coef += d_ut * (edg.VAL - edg.thr)
             end
-        end
-
-        if n.nucleus.VAL >= n.nucleus.thr
-            for e in n.axons
-                e.VAL += dt * n.nucleus.VAL
-            end
-            n.nucleus.VAL = 0
+            nl1[n1].VAL = 0
         end
     end
+
+    out = []
+    for n2 in eachindex(nl2)
+        for den in em[:, n2]
+            if den.VAL >= den.thr
+                nl2[n2].VAL += den.thr
+                den.VAL = 0
+            end
+        end
+        append(out, [nl2[n2].thr * (nl2[n2].VAL >= nl2[n2].thr)])
+    end
+
+    return out
 end
 
-# conectum
-'''
-     A  B  C
-A   |x||_||_|
-B   |_||x||_|
-C   |_||_||x|
-'''
-
-mutable struct conectum
-    connections::AbstractArray{edge}
-end
 
 mutable struct RNN_Runner_agent
     buffer_size::Integer
@@ -89,3 +87,34 @@ function run_agent!(x::AbstractArray, runner::RNN_Runner_agent)
 end
 
 function train_agent()
+end
+# Q-table -> sigmoid -> board-mask
+#  board-mask
+
+
+function get_mask(con::conectum)
+    # axon = 'a'
+    # dendrite = 'd'
+    # nucleus = 'n'
+    # missing = 'x'
+
+    out = []
+    for i in eachindex(conectum)
+        if typeof(conectum[i]) == node
+            append!(out[i], 'n')
+        elseif typeof(conectum[i]) == edge
+            append!(out[i], 'x')
+        else
+            append!(out[i], 'x')
+        end
+    end
+    return reshape(out, ())
+end
+
+function get_param_count(hidden_sizes::AbstractVector)
+    s = 0
+    for h in eachindex(hidden_sizes)[1:end-1]
+        s += hidden_sizes[h] * hidden_sizes[h+1]
+    end
+    return s
+end
