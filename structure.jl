@@ -1,29 +1,28 @@
-
 # STRUCTURE
 mutable struct edge
-    VAL::Float16
+    VAL::AbstractFloat
 
-    thr::Float16
-    res_coef::Float16 # recovery speed
-    freq_coef::Float16 # frequency
+    thr::AbstractFloat
+    res_coef::AbstractFloat # recovery speed
+    freq_coef::AbstractFloat # frequency
 end
 mutable struct node
-    VAL::Float16
+    VAL::AbstractFloat
 
-    thr::Float16
-    res_coef::Float16
-    phase::Float16
+    thr::AbstractFloat
+    res_coef::AbstractFloat
+    phase::AbstractFloat
 end
 
-conectum = AbstractArray{Union{edge, Missing}, 2}
-mask = AbstractArray{Bool, 2}
-neuron_layer = AbstractVector{node}
-network = AbstractVector{Union{neuron_layer, conectum, mask}}
+conectum = Array{Union{edge, Missing}, 2}
+mask = Array{Bool, 2}
+neuron_layer = Array{node, 1}
+network = Array{Union{neuron_layer, conectum, mask}}
 
 # UTILITY FUNCTIONS
 function Base.getindex(n::node, i::Integer); return n[i]; end
-raw(e::edge) = [copy(e.thr), copy(e.res_coef), copy(freq_coef)]
-raw(n::node) = [copy(n.thr), copy(n.res_coef), copy(phase)]
+raw(e::edge) = [copy(e.thr), copy(e.res_coef), copy(e.freq_coef)]
+raw(n::node) = [copy(n.thr), copy(n.res_coef), copy(n.phase)]
 function Base.copy(x::neuron_layer); return collect(Iterators.flatten([raw(l) for l in x])); end
 function Base.copy(x::conectum); return collect(Iterators.flatten([raw(l) for l in x])); end
 
@@ -31,7 +30,7 @@ function Base.copy(x::conectum); return collect(Iterators.flatten([raw(l) for l 
 
 
 # OTHER ///UC (under construction)
-function feed_forward!(nl1::neuron_layer, nl2::neuron_layer, em::conectum, x::AbstractVector, d_ut::Float16)
+function feed_forward!(nl1::neuron_layer, nl2::neuron_layer, em::conectum, x::AbstractVector, d_ut::AbstractFloat)
     for n1 in eachindex(nl1, x)
         nl1[n1].VAL += x[n1]
         nl1[n1].VAL += d_ut * cos(nl1[n1].phase)
@@ -70,7 +69,9 @@ function get_param_count(hidden_sizes::AbstractVector)
     return s
 end
 
-function construct_network(params::AbstractVector, hidden_sizes::AbstractVector; number_of_edge_params=3, number_of_node_params=3)::network
+function construct_network(params::AbstractVector, hidden_sizes::AbstractVector; number_of_edge_params=4, number_of_node_params=4)::network
+    # INFO: order - neuron, conectum, mask
+
     ret_net = network([])
     it = 1
     for i in length(hidden_sizes)-1
@@ -78,9 +79,12 @@ function construct_network(params::AbstractVector, hidden_sizes::AbstractVector;
         conectum_param_ind = neuron_param_ind + hidden_sizes[i] * hidden_sizes[i+1] * number_of_edge_params
         mask_param_ind     = conectum_param_ind + hidden_sizes[i] * hidden_sizes[i+1]
 
-        append!(ret_net, [neuron_layer(params[it:neuron_param_ind])])
-        append!(ret_net, [conectum(reshape(params[neuron_param_ind+1:conectum_param_ind]), (hidden_sizes[i], hidden_sizes[i+1]))])
-        append!(ret_net, [mask(reshape(params[conectum_param_ind+1:mask_param_ind], (hidden_sizes[i], hidden_sizes[i+1])))])
+        println("neuron_param_ind   = $neuron_param_ind")
+        println("conectum_param_ind = $conectum_param_ind")
+        println("mask_param_ind     = $mask_param_ind")
+        append!(ret_net, [neuron_layer([node(params[j:j+number_of_node_params-1]...) for j in it:number_of_node_params:neuron_param_ind-1])])
+        append!(ret_net, [conectum(reshape([edge(params[j:j+number_of_edge_params-1]...) for j in neuron_param_ind:number_of_edge_params:conectum_param_ind-1], (hidden_sizes[i], hidden_sizes[i+1])))])
+        append!(ret_net, [mask(reshape(params[conectum_param_ind:mask_param_ind-1], (hidden_sizes[i], hidden_sizes[i+1])))])
 
         it += neuron_params + conectum_params + mask_params
     end
@@ -99,7 +103,7 @@ function deconstruct_network(net::network)
             append!(ret_par, [copy(layer)])
         end
     end
-    return ret_par
+    return collect(Iterators.flatten(ret_par))
 end
 
 function apply_mask!(cons::conectum, m::mask)
@@ -149,9 +153,9 @@ end
 X = rand(20)
 input_size = length(X)
 hidden_sizes = [15, 10, 5, 2]
-d_UT = 0.01 |> Float16 # update time
-d_RT = 0.5 |> Float16 # reaction time
-d_GT = 1 |> Float16 # growth time
+d_UT = 0.01 |> AbstractFloat # update time
+d_RT = 0.5 |> AbstractFloat # reaction time
+d_GT = 1 |> AbstractFloat # growth time
 
 nl1 = neuron_layer([node(rand(4)...) for _ in 1:input_size])
 nl2 = neuron_layer([node(rand(4)...) for _ in 1:input_size])
@@ -159,5 +163,5 @@ con = conectum(reshape([edge(rand(4)...) for _ in 1:input_size^2], (input_size, 
 net = network([nl2, nl1, con])
 feed_forward!(nl1, nl2, con, X, d_UT) |> println
 
-deconstruct_network(net)
-construct_network()
+pars = deconstruct_network(net)
+construct_network(pars, hidden_sizes)
