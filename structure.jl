@@ -67,33 +67,39 @@ function update!(con::conectum, m::mask, x::AbstractArray, d_ut)
     return out
 end
 
-function feed_forward!(net::network, x::AbstractArray, d_ut)
+function ward!(net::network, x::AbstractArray, d_ut)
     o = update!(net.neuron_layers[1], x, d_ut)
     o = update!(net.conectums[1], net.masks[1], o, d_ut)
-    for i in 2:length(net.neuron_layers)-1
+    for i in 2:length(net.neuron_layers)
         o = update!(net.neuron_layers[i], o, d_ut)
         o = update!(net.conectums[i], net.masks[i], o, d_ut)
     end
-    return update!(net.neuron_layers[end], o, d_ut)
+    return o
 end
 
 function construct_network(params::AbstractVector, hidden_sizes::AbstractVector; number_of_edge_params=4, number_of_node_params=4)::network
     ret_net = network([], [], [])
     it = 1
 
-    for i in length(hidden_sizes)-1
+    for i in 1:length(hidden_sizes)-1
         neuron_param_ind   = it + hidden_sizes[i] * number_of_node_params
         conectum_param_ind = neuron_param_ind + hidden_sizes[i] * hidden_sizes[i+1] * number_of_edge_params
         mask_param_ind     = conectum_param_ind + hidden_sizes[i] * hidden_sizes[i+1]
 
+        println("lay = $i")
+        println("it  = $it")
+        println("npi = $neuron_param_ind")
+        println("cpi = $conectum_param_ind")
+        println("mpi = $mask_param_ind")
+
+        println("\n $(params[it:it+number_of_node_params-1]) \n")
+
         append!(ret_net.neuron_layers, [neuron_layer([node(params[j:j+number_of_node_params-1]...) for j in it:number_of_node_params:neuron_param_ind-1])])
         append!(ret_net.conectums, [conectum(reshape([edge(params[j:j+number_of_edge_params-1]...) for j in neuron_param_ind:number_of_edge_params:conectum_param_ind-1], (hidden_sizes[i], hidden_sizes[i+1])))])
-        append!(ret_net.masks, [mask(reshape(clamp.(round.(params[conectum_param_ind:mask_param_ind-1]), 0, 1) .|> Bool, (hidden_sizes[i], hidden_sizes[i+1])))])
+        append!(ret_net.masks, [mask(reshape(Bool.(clamp.(round.(params[conectum_param_ind:mask_param_ind-1]), 0, 1)), (hidden_sizes[i], hidden_sizes[i+1])))])
 
-        it += mask_param_ind - neuron_param_ind
+        it = mask_param_ind
     end
-
-    append!(neuron_layers, [neuron_layer([node(params[j:j+number_of_node_params-1]...) for j in mask_param_ind:number_of_node_params:length(params)])])
 
     # INFO: order - neurons, conectum, mask, neurons, conectum, mask, ..., mask, neurons
     return ret_net
@@ -111,57 +117,75 @@ function deconstruct_network(net::network)
     return collect(Iterators.flatten(ret_par))
 end
 
-mutable struct RNN_Runner_agent
-    buffer_size::Integer
-    input_buffer::AbstractArray{AbstractFloat}
-    hidden_buffer::AbstractArray{AbstractFloat}
-    xh_w_buffer::AbstractArray{AbstractFloat}
-    xh_b_buffer::AbstractArray{AbstractFloat}
-    hh_w_buffer::AbstractArray{AbstractFloat}
-    hh_b_buffer::AbstractArray{AbstractFloat}
-    hy_w_buffer::AbstractArray{AbstractFloat}
-    hy_b_buffer::AbstractArray{AbstractFloat}
-end
-
-function run_agent!(x::AbstractArray, runner::RNN_Runner_agent)
-    h_t = x * xh_w_buffer[end] .+ xh_b_buffer[end]
-    h_t1 = h_t * hh_w_buffer[end] .+ hh_b_buffer[end] # x=512 -> 512xh_size -> h_size -> h_sizexh_size -> h_size
-
-    # dxhw_dy = hidden_buffer[end]
-    # dhhw_dy = dht_dy * hidden_buffer[end-1]
-    # dxhw_dw = dht_dy * dht1_dht * input_buffer[end]
-
-    # PUT IN LOOP
-
-    # append input & hidden
-    if length(runner.input_buffer) <= unner.buffer_size
-        append!(runner.hidden_buffer, h_t)
-        append!(runner.xh_w_buffer, )
-    else
-        # shift up
-    end
-end
-
-
 
 # TEST
-using Main.IMPORTS
-using Main.FUNCTIONS
-
-input_size = length(X)
-hidden_sizes = [15, 10, 5, 2]
-no_params_per_lay = hidden_sizes .+ hidden_sizes .^ 2 .* 2
+X = rand(15)
+hidden_sizes = [15, 10, 5, 2, 5, 10, 15]
+no_node_params = 4
+no_edge_params = 4
+no_params_per_lay = [hidden_sizes[i] * no_node_params + hidden_sizes[i] * hidden_sizes[i+1] * no_edge_params + hidden_sizes[i] * hidden_sizes[i+1] for i in 1:length(hidden_sizes)-1]
 d_UT = 0.01 |> AbstractFloat # update time
 d_RT = 0.5 |> AbstractFloat # reaction time
-d_GT = 1 |> AbstractFloat # growth time
-
-
-X = rand(20)
 
 parrs = rand(sum(no_params_per_lay))
 net = construct_network(parrs, hidden_sizes)
-feed_forward!(net, X, d_UT)
+feed_forward!(net, X, d_UT) |> show
 
 pars = deconstruct_network(net)
 pars .|> round
 construct_network(pars, hidden_sizes)
+
+
+training_episodes = 50
+parallel_agents = 5
+agent_runtime = 30
+
+
+function train!(initial_parameter_collection, hidden_sizes, env_name, env_version, training_episodes, parallel_agents, agent_runtime; inverse_percentile=70)
+
+    env = OpenAIGym.make_env(env_name, env_version)
+    networks = [construct_network(ip, hidden_sizes) for ip in initial_parameter_collection]
+
+    for e in 1:training_episodes
+
+        net_buffer = []
+
+        for k in 1:length(networks)
+
+            for e in 1:runtime_episodes
+
+                s = reset!(env)
+                rr = 0 # reward record
+
+                for t in d_UT:d_UT:agent_runtime
+
+                    o = feed_forward!(agents[k], s |> Array)
+
+                    if t % d_RT == 0
+                        a = env.actionspace(argmax(o))
+                        step!(env, a)
+
+                        rr += env.reward
+                    end
+                end
+
+                append!(net_buffer, [(rr, deconstruct_network(agents[k]))])
+            end
+        end
+
+        percentile_margin = max([r[1] for r in net_buffer]) / 100 * inverse_percentile
+
+        top_nets = collect(Iterators.filter(x->x>percentile_margin, net_buffer))
+
+        for i in eachindex(networks)
+            y = deconstruct_network(network[i])
+
+            for tn in top_nets
+                y_hat = tn[2]
+                # forward pass y-y_hat for each top network
+            end
+
+            # reconstruction error
+        end
+    end
+end
