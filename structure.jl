@@ -1,4 +1,5 @@
 using Flux
+using OpenAIGym
 
 # STRUCTURE
 mutable struct edge
@@ -118,53 +119,33 @@ function deconstruct_network(net::network)
 end
 
 
-# TEST
-X = rand(15)
-hidden_sizes = [15, 10, 5, 2, 5, 10, 15]
-no_node_params = 4
-no_edge_params = 4
-no_params_per_lay = [hidden_sizes[i] * no_node_params + hidden_sizes[i] * hidden_sizes[i+1] * no_edge_params + hidden_sizes[i] * hidden_sizes[i+1] for i in 1:length(hidden_sizes)-1]
-d_UT = 0.01 |> AbstractFloat # update time
-d_RT = 0.5 |> AbstractFloat # reaction time
+function _train!(initial_parameter_collection, hidden_sizes, env, encoder, decoder, training_episodes, agent_runtime, runtime_episodes; top_percentile=30, render=false, state_mutation=x->x, optimizer=Flux.Descent())
 
-parrs = rand(sum(no_params_per_lay))
-net = construct_network(parrs, hidden_sizes)
-feed_forward!(net, X, d_UT) |> show
-
-pars = deconstruct_network(net)
-pars .|> round
-construct_network(pars, hidden_sizes)
-
-
-training_episodes = 50
-parallel_agents = 5
-agent_runtime = 30
-
-
-function train!(initial_parameter_collection, hidden_sizes, env_name, env_version, training_episodes, parallel_agents, agent_runtime; inverse_percentile=70)
-
-    env = OpenAIGym.make_env(env_name, env_version)
     networks = [construct_network(ip, hidden_sizes) for ip in initial_parameter_collection]
+
+    l1(x, y) = Flux.mse(decoder(encoder(x)), y)
+    l2(x, y) = Flux.mse(encoder(decoder(encoder(x))), encoder(y))
+
 
     for e in 1:training_episodes
 
         net_buffer = []
 
         for k in 1:length(networks)
-
             for e in 1:runtime_episodes
 
-                s = reset!(env)
+                s = Array(reset!(env)) |> state_mutation
                 rr = 0 # reward record
 
                 for t in d_UT:d_UT:agent_runtime
-
-                    o = feed_forward!(agents[k], s |> Array)
+                    o = feed_forward!(agents[k], s)
 
                     if t % d_RT == 0
-                        a = env.actionspace(argmax(o))
-                        step!(env, a)
+                        a = env.actions[argmax(o)]
 
+                        if render; render(env); end
+
+                        s = Array(step!(env, a)) |> state_mutation
                         rr += env.reward
                     end
                 end
@@ -173,19 +154,59 @@ function train!(initial_parameter_collection, hidden_sizes, env_name, env_versio
             end
         end
 
-        percentile_margin = max([r[1] for r in net_buffer]) / 100 * inverse_percentile
-
+        percentile_margin = max([r[1] for r in net_buffer]) / 100 * (100 - top_percentile)
         top_nets = collect(Iterators.filter(x->x>percentile_margin, net_buffer))
 
         for i in eachindex(networks)
-            y = deconstruct_network(network[i])
+            y = deconstruct_network(networks[i])
 
             for tn in top_nets
-                y_hat = tn[2]
+                y_top = tn[2]
                 # forward pass y-y_hat for each top network
+
+                Flux.train!(l1, decoder_params, [(y, y_top)], optimizer) # better net construction error
             end
 
-            # reconstruction error
+            Flux.train!(l1, [encoder_params..., decoder_params...], [(y, y)], optimizer) # reconstruction error
+            Flux.train!(l2, encoder_params, [(y, y)], optimizer) # z reconstruction
         end
+
+        net_buffer = []
     end
 end
+
+
+# APPLICATION
+env = GymEnv(:LunarLander, :v2); size(env.state)
+
+
+# descision network params
+input_size = length(env.state)
+hidden_sizes = [input_size, 10, 10, 10, length(env.actions)]
+no_node_params = 4
+no_edge_params = 4
+no_params_per_lay = [hidden_sizes[i] * no_node_params + hidden_sizes[i] * hidden_sizes[i+1] * no_edge_params + hidden_sizes[i] * hidden_sizes[i+1] for i in 1:length(hidden_sizes)-1]
+d_UT = 0.01 # update time
+d_RT = 0.5 # reaction time
+
+# evolution network
+encoder_hiddens = [400, 200, 100, 50]
+decoder_hiddens = [50, 100, 200, 400]
+encoder = Chain(
+    Dense(sum(no_params_per_lay), encoder_hiddens[1], relu),
+    [Dense(encoder_hiddens[i], encoder_hiddens[i+1]) for i in 1:length(encoder_hiddens)-2]...,
+    Dense(encoder_hiddens[end-1], encoder_hiddens[end], sigmoid))
+decoder = Chain(
+    [Dense(decoder_hiddens[i], decoder_hiddens[i+1], relu) for i in 1:length(decoder_hiddens)-1]...,
+    Dense(decoder_hiddens[end], sum(no_params_per_lay), sigmoid))
+
+
+# general params
+training_episodes = 50
+runtime_episodes = 50
+agent_runtime = 30; no_env_steps = agent_runtime/d_RT; no_update_steps = agent_runtime/d_UT
+no_parallel_agents = 1
+
+
+init_params = [rand(sum(no_params_per_lay)) for _ in 1:no_parallel_agents]
+_train!(init_params, hidden_sizes, env, encoder, decoder, training_episodes, agent_runtime, runtime_episodes)
