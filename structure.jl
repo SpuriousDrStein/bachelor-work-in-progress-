@@ -29,8 +29,8 @@ end
 
 # UTILITY FUNCTIONS
 function Base.getindex(n::node, i::Integer); return n[i]; end
-raw(e::edge) = [copy(e.thr), copy(e.res_coef), copy(e.freq_coef)]
-raw(n::node) = [copy(n.thr), copy(n.res_coef), copy(n.freq_coef)]
+raw(e::edge) = [copy(e.VAL), copy(e.thr), copy(e.res_coef), copy(e.freq_coef)]
+raw(n::node) = [copy(n.VAL), copy(n.thr), copy(n.res_coef), copy(n.freq_coef)]
 function Base.copy(x::neuron_layer); return collect(Iterators.flatten([raw(l) for l in x])); end
 function Base.copy(x::conectum); return collect(Iterators.flatten([raw(l) for l in x])); end
 
@@ -68,7 +68,7 @@ function update!(con::conectum, m::mask, x::AbstractArray, d_ut)
     return out
 end
 
-function ward!(net::network, x::AbstractArray, d_ut)
+function feed_forward!(net::network, x::AbstractArray, d_ut)
     o = update!(net.neuron_layers[1], x, d_ut)
     o = update!(net.conectums[1], net.masks[1], o, d_ut)
     for i in 2:length(net.neuron_layers)
@@ -87,13 +87,13 @@ function construct_network(params::AbstractVector, hidden_sizes::AbstractVector;
         conectum_param_ind = neuron_param_ind + hidden_sizes[i] * hidden_sizes[i+1] * number_of_edge_params
         mask_param_ind     = conectum_param_ind + hidden_sizes[i] * hidden_sizes[i+1]
 
-        println("lay = $i")
-        println("it  = $it")
-        println("npi = $neuron_param_ind")
-        println("cpi = $conectum_param_ind")
-        println("mpi = $mask_param_ind")
+        # println("lay = $i")
+        # println("it  = $it")
+        # println("npi = $neuron_param_ind")
+        # println("cpi = $conectum_param_ind")
+        # println("mpi = $mask_param_ind")
+        # println("\n $(params[it:it+number_of_node_params-1]) \n")
 
-        println("\n $(params[it:it+number_of_node_params-1]) \n")
 
         append!(ret_net.neuron_layers, [neuron_layer([node(params[j:j+number_of_node_params-1]...) for j in it:number_of_node_params:neuron_param_ind-1])])
         append!(ret_net.conectums, [conectum(reshape([edge(params[j:j+number_of_edge_params-1]...) for j in neuron_param_ind:number_of_edge_params:conectum_param_ind-1], (hidden_sizes[i], hidden_sizes[i+1])))])
@@ -108,54 +108,62 @@ end
 
 function deconstruct_network(net::network)
     ret_par = []
-    for l in eachindex(net.conectums, net.masks)
+    for l in eachindex(net.conectums)
         append!(ret_par, copy(net.neuron_layers[l]))
         append!(ret_par, copy(net.conectums[l]))
         append!(ret_par, copy(net.masks[l]))
     end
-    append!(ret_par, copy(net.neuron_layers[end]))
 
     return collect(Iterators.flatten(ret_par))
 end
 
 
-function _train!(initial_parameter_collection, hidden_sizes, env, encoder, decoder, training_episodes, agent_runtime, runtime_episodes; top_percentile=30, render=false, state_mutation=x->x, optimizer=Flux.Descent())
+function _train!(initial_parameter_collection, hidden_sizes, env, encoder, decoder, training_episodes, agent_runtime, runtime_episodes, d_UT, d_RT;top_percentile=30, render=false, state_mutation=x->x, network_sample_function=x->, optimizer=Flux.Descent())
 
     networks = [construct_network(ip, hidden_sizes) for ip in initial_parameter_collection]
 
     l1(x, y) = Flux.mse(decoder(encoder(x)), y)
     l2(x, y) = Flux.mse(encoder(decoder(encoder(x))), encoder(y))
 
+    encoder_params = Flux.params(encoder)
+    decoder_params = Flux.params(decoder)
+
 
     for e in 1:training_episodes
+        println("episode: $e")
 
         net_buffer = []
 
         for k in 1:length(networks)
-            for e in 1:runtime_episodes
+            println("   agent: $k")
+
+            for re in 1:runtime_episodes
+                println("       runtime episode: $re")
 
                 s = Array(reset!(env)) |> state_mutation
                 rr = 0 # reward record
 
                 for t in d_UT:d_UT:agent_runtime
-                    o = feed_forward!(agents[k], s)
+                    o = feed_forward!(networks[k], s, d_UT)
 
                     if t % d_RT == 0
                         a = env.actions[argmax(o)]
 
                         if render; render(env); end
 
-                        s = Array(step!(env, a)) |> state_mutation
-                        rr += env.reward
+                        r, s = step!(env, a)
+                        s = state_mutation(Array(s))
+
+                        rr += r
                     end
                 end
 
-                append!(net_buffer, [(rr, deconstruct_network(agents[k]))])
+                append!(net_buffer, [(rr, deconstruct_network(networks[k]))])
             end
         end
 
-        percentile_margin = max([r[1] for r in net_buffer]) / 100 * (100 - top_percentile)
-        top_nets = collect(Iterators.filter(x->x>percentile_margin, net_buffer))
+        percentile_margin = maximum([r[1] for r in net_buffer]) / 100 * (100 - top_percentile)
+        top_nets = collect(Iterators.filter(x->x[1]>percentile_margin, net_buffer))
 
         for i in eachindex(networks)
             y = deconstruct_network(networks[i])
@@ -170,6 +178,9 @@ function _train!(initial_parameter_collection, hidden_sizes, env, encoder, decod
             Flux.train!(l1, [encoder_params..., decoder_params...], [(y, y)], optimizer) # reconstruction error
             Flux.train!(l2, encoder_params, [(y, y)], optimizer) # z reconstruction
         end
+
+        println("best net rewards: $([tn[1] for tn in top_nets])")
+
 
         net_buffer = []
     end
@@ -189,6 +200,10 @@ no_params_per_lay = [hidden_sizes[i] * no_node_params + hidden_sizes[i] * hidden
 d_UT = 0.01 # update time
 d_RT = 0.5 # reaction time
 
+
+
+
+
 # evolution network
 encoder_hiddens = [400, 200, 100, 50]
 decoder_hiddens = [50, 100, 200, 400]
@@ -203,10 +218,22 @@ decoder = Chain(
 
 # general params
 training_episodes = 50
-runtime_episodes = 50
-agent_runtime = 30; no_env_steps = agent_runtime/d_RT; no_update_steps = agent_runtime/d_UT
+runtime_episodes = 30
+agent_runtime = 30; println("no_env_steps = $(agent_runtime/d_RT); no_discrete_update_steps = $(agent_runtime/d_UT)")
 no_parallel_agents = 1
 
 
+# Tests:
+p = rand(sum(no_params_per_lay))
+n = construct_network(p, hidden_sizes)
+pr = deconstruct_network(n)
+
+l1(x,y) = Flux.mse(decoder(encoder(x)), y)
+
+for _ in 1:100
+    Flux.train!(l1, Flux.params(encoder), [(pr, pr)], Flux.Descent())
+    println(l1(pr, pr))
+end
+
 init_params = [rand(sum(no_params_per_lay)) for _ in 1:no_parallel_agents]
-_train!(init_params, hidden_sizes, env, encoder, decoder, training_episodes, agent_runtime, runtime_episodes)
+_train!(init_params, hidden_sizes, env, encoder, decoder, training_episodes, agent_runtime, runtime_episodes, d_UT, d_RT)
